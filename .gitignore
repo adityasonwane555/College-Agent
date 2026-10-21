@@ -1,0 +1,63 @@
+# Virtual Environment
+.venv/
+env/
+venv/
+
+# Node & Frontend
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# Database & Generated Data
+*.db
+*.sqlite3
+*.sqlite
+data/*.db
+backend/data/*.db
+data/uploads/*
+!data/uploads/.gitkeep
+data/audio_temp/*
+!data/audio_temp/.gitkeep
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment Variables & Secrets
+.env
+*.pem
+*.key
+
+# Model Weights & Compiled Binaries (Never commit multi-GB weights or build outputs)
+*.gguf
+*.bin
+*.pt
+*.pth
+*.onnx
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+*.obj
+*.lib
+BUDDY-Fish-TTS/models/*.gguf
+BUDDY-Fish-TTS/s2.cpp/
+BUDDY-Fish-TTS/output/*.wav
+BUDDY-Fish-TTS/logs/
+
+# Audio outputs
+*.wav
+*.mp3
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

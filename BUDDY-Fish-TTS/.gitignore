@@ -1,0 +1,24 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Model Weights (Do not commit multi-gigabyte GGUF files)
+models/*.gguf
+models/.cache/
+
+# Generated Output Audio
+output/*.wav
+!output/.gitkeep
+
+# Build and IDE artifacts
+s2.cpp/build/
+s2.cpp/build-*/
+.vscode/
+.idea/
+.env

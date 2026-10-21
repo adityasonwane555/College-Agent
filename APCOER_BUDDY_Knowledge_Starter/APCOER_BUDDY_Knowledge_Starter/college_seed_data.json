@@ -1,0 +1,290 @@
+[
+  {
+    "id": "institution.name",
+    "category": "institution",
+    "question_variants": [
+      "What is the college name?",
+      "What does APCOER stand for?",
+      "Which college is this?"
+    ],
+    "answer": "A.B.M.S. Parishad's Anantrao Pawar College of Engineering & Research (APCOER), located in Parvati, Pune.",
+    "source_url": "https://abmspcoerpune.org/",
+    "source_title": "Official home page",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Use the official site name; preserve the site's spelling when quoting."
+  },
+  {
+    "id": "institution.address",
+    "category": "contact",
+    "question_variants": [
+      "What is the college address?",
+      "Where is APCOER located?",
+      "Give me the college location."
+    ],
+    "answer": "S. No. 103, Shahu College Road, Parvati, Pune - 411009, Maharashtra, India.",
+    "source_url": "https://abmspcoerpune.org/contact/",
+    "source_title": "Contact Us",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "The contact page also uses the wording Shahu College Complex / Laxminagar, Parvati, Pune - 411009 for hostels."
+  },
+  {
+    "id": "institution.dte_code",
+    "category": "institution",
+    "question_variants": [
+      "What is the college DTE code?",
+      "What is APCOER's DTE code?"
+    ],
+    "answer": "6794.",
+    "source_url": "https://abmspcoerpune.org/",
+    "source_title": "Official home page",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Confirm against current admission authority documents before making high-stakes admission decisions."
+  },
+  {
+    "id": "institution.established",
+    "category": "institution",
+    "question_variants": [
+      "When was the college established?",
+      "Tell me about APCOER."
+    ],
+    "answer": "The institute's About page says it was established in 2012 and is an institute of Akhil Bharatiya Maratha Shikshan Parishad. The page describes a 10-acre campus near Parvati Hills in Pune.",
+    "source_url": "https://abmspcoerpune.org/a-b-m-s-parishad-history/about-institute/",
+    "source_title": "About Institute",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim"
+  },
+  {
+    "id": "institution.accreditation",
+    "category": "institution",
+    "question_variants": [
+      "Is the college accredited?",
+      "What accreditation does APCOER have?"
+    ],
+    "answer": "The home page describes the college as NAAC accredited and ISO 9001:2015 certified. Some individual department pages label specific programmes as NBA accredited; verify the exact programme and current validity from the relevant official page.",
+    "source_url": "https://abmspcoerpune.org/",
+    "source_title": "Official home page",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Do not generalize department-level NBA accreditation to all programmes."
+  },
+  {
+    "id": "institution.vision",
+    "category": "institution",
+    "question_variants": [
+      "What is the college vision?",
+      "What is APCOER's vision?"
+    ],
+    "answer": "Committed to comprehensive development of students through quality technical education.",
+    "source_url": "https://abmspcoerpune.org/a-b-m-s-parishad-history/vision-mission/",
+    "source_title": "Vision & Mission",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim"
+  },
+  {
+    "id": "institution.mission",
+    "category": "institution",
+    "question_variants": [
+      "What is the college mission?",
+      "What are APCOER's mission statements?"
+    ],
+    "answer": "The official page lists five mission points: provide state-of-the-art infrastructure for novel ideas, research and consultancy; inspire creation and entrepreneurship; develop technocrats with intelligence, technical skills and ethical values; provide a healthy teaching-learning environment that cultivates research, innovation and invention; and develop a centre of excellence in technical education.",
+    "source_url": "https://abmspcoerpune.org/a-b-m-s-parishad-history/vision-mission/",
+    "source_title": "Vision & Mission",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim"
+  },
+  {
+    "id": "contact.office_phones",
+    "category": "contact",
+    "question_variants": [
+      "What is the college office phone number?",
+      "How can I call the college office?"
+    ],
+    "answer": "The contact page lists 020-24218901 and 020-24218959 as office phone numbers, and 020-24213929 as the tele-fax number.",
+    "source_url": "https://abmspcoerpune.org/contact/",
+    "source_title": "Contact Us",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim"
+  },
+  {
+    "id": "contact.email",
+    "category": "contact",
+    "question_variants": [
+      "What is the college email address?",
+      "How do I email the college?"
+    ],
+    "answer": "The contact page lists office@abmspcoerpune.org. It also lists web.admin@abmspcoerpune.org for the website administrator and abmspcoe@yahoo.com elsewhere on the same page.",
+    "source_url": "https://abmspcoerpune.org/contact/",
+    "source_title": "Contact Us",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Use office@abmspcoerpune.org for general official correspondence unless the user's question calls for another listed address."
+  },
+  {
+    "id": "contact.principal",
+    "category": "contact",
+    "question_variants": [
+      "Who is the principal?",
+      "Who is APCOER's principal?"
+    ],
+    "answer": "The contact page names Dr. Sunil Bhimrao Thakare, M.E. (Civil), Ph.D. (Environmental Engineering), as Principal.",
+    "source_url": "https://abmspcoerpune.org/contact/",
+    "source_title": "Contact Us",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Leadership can change; re-check the official page before answering."
+  },
+  {
+    "id": "hostel.addresses",
+    "category": "facilities",
+    "question_variants": [
+      "Where are the hostels?",
+      "What are the hostel addresses?"
+    ],
+    "answer": "The contact page lists Jedhe More Boys Hostel and Mrs. Sharadabai Pawar Girls Hostel at S. No. 103, Shahu College Complex, Laxminagar, Parvati, Pune - 411009. The girls' hostel phone listed is 020-68004640.",
+    "source_url": "https://abmspcoerpune.org/contact/",
+    "source_title": "Contact Us",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim"
+  },
+  {
+    "id": "programmes.undergraduate",
+    "category": "academics",
+    "question_variants": [
+      "What undergraduate courses are offered?",
+      "Which engineering branches are available?"
+    ],
+    "answer": "The site's navigation lists First Year Engineering, Artificial Intelligence & Data Science, Civil Engineering, Computer Engineering, Electronics & Telecommunication Engineering, Electronics and Communication Engineering (Advanced Communication Technology), Electronics Engineering (VLSI Design and Technology), Information Technology, and Mechanical Engineering.",
+    "source_url": "https://abmspcoerpune.org/",
+    "source_title": "Official home page / Departments navigation",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Programme names and availability should be checked against current-year admission documents."
+  },
+  {
+    "id": "programmes.postgraduate",
+    "category": "academics",
+    "question_variants": [
+      "What postgraduate courses are offered?",
+      "Does the college offer MCA or ME?"
+    ],
+    "answer": "The site's navigation lists Environmental Engineering, Mechanical Engineering, Master of Computer Applications (MCA), Masters in Computer Engineering, and Masters in Electronics and Communication (VLSI Design) Engineering.",
+    "source_url": "https://abmspcoerpune.org/",
+    "source_title": "Official home page / Departments navigation",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Verify current intake and programme availability for the relevant academic year."
+  },
+  {
+    "id": "admissions.first_year",
+    "category": "admissions",
+    "question_variants": [
+      "How do I apply for first-year engineering?",
+      "What are first-year engineering admission rules?"
+    ],
+    "answer": "The First Year Engineering page says admissions generally follow Maharashtra Directorate of Technical Education (DTE) rules and University of Pune norms, with CAP applicants applying online as per DTE notifications. The page describes HSC/equivalent with Physics and Mathematics plus one of Chemistry/Biotechnology/Biology/Technical/Vocational subject, with minimum marks and CET requirements, or specified diploma/B.Sc. pathways. These criteria must be checked against current official admission rules before relying on them.",
+    "source_url": "https://abmspcoerpune.org/b-e-first-year-under-graduates/",
+    "source_title": "B.E. First Year (Under Graduates)",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "The page's listed eligibility may change by admission year. Do not present as definitive without current DTE/CET verification."
+  },
+  {
+    "id": "admissions.direct_second_year",
+    "category": "admissions",
+    "question_variants": [
+      "Can I get direct second-year admission?",
+      "What are DSE eligibility rules?"
+    ],
+    "answer": "The Direct Second Year page says diploma holders in engineering can apply through the DTE centralized admission procedure. It also describes a B.Sc. pathway with HSC Mathematics and minimum marks. Check the current DTE rules and official notice for the admission year.",
+    "source_url": "https://abmspcoerpune.org/direct-second-year-under-graduates/",
+    "source_title": "Direct Second Year (Under Graduates)",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Eligibility details on the page include 45% minimum marks (40% for specified Maharashtra categories); verify current official rules."
+  },
+  {
+    "id": "facilities.summary",
+    "category": "facilities",
+    "question_variants": [
+      "What facilities does the college have?",
+      "Does the college have hostels or Wi-Fi?"
+    ],
+    "answer": "The facilities page lists boys' and girls' hostels, campus Wi-Fi, public transport access, e-learning, audio-visual classrooms, laboratories and workshops, a library collection described as over 8,000 books, extended library/computer-centre hours, playground and indoor court, industrial visits, guest lectures, technical training, student clubs, an innovation club, language lab, fire-prevention system and generator backup.",
+    "source_url": "https://abmspcoerpune.org/facilities/",
+    "source_title": "Facilities",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Some page content may be old or typo-ridden; confirm individual facilities before making operational promises."
+  },
+  {
+    "id": "library.contact",
+    "category": "library",
+    "question_variants": [
+      "Who is the librarian?",
+      "How do I contact the library?"
+    ],
+    "answer": "The library page lists Prof. Tanaji S. Mali as Librarian, phone 9960424904, and email addresses apcoerlibrary@gmail.com and library@abmspcoerpune.org.",
+    "source_url": "https://abmspcoerpune.org/library-details/",
+    "source_title": "Library",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Contact information should be periodically re-verified."
+  },
+  {
+    "id": "placements.contact",
+    "category": "placements",
+    "question_variants": [
+      "Who is the Training and Placement Officer?",
+      "How can I contact the placement cell?"
+    ],
+    "answer": "The Training & Placement page lists Prof. Digambar D. Pawar as Training and Placement Officer, with phone 7249617773 and email addresses digambarid@yahoo.com and tpo@abmspcoerpune.org.",
+    "source_url": "https://abmspcoerpune.org/placements/",
+    "source_title": "T&P Cell",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim",
+    "notes": "Confirm current role/contact before public deployment."
+  },
+  {
+    "id": "admissions.enquiry",
+    "category": "admissions",
+    "question_variants": [
+      "What is the admission enquiry number?",
+      "Who should I call for admission information?"
+    ],
+    "answer": "The home page lists 020-24218959 for admission information.",
+    "source_url": "https://abmspcoerpune.org/",
+    "source_title": "Official home page",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim"
+  },
+  {
+    "id": "site.sections",
+    "category": "navigation",
+    "question_variants": [
+      "What information is available on the website?",
+      "Where can I find college documents?"
+    ],
+    "answer": "The site's navigation includes About, Departments, Admissions, Facilities, Training & Placement, Research & Development, Library, Alumni, Student Section, Examination Section, Downloads, NAAC, AQAR, NIRF, International Conference, mandatory disclosure, recruitment and contact information. Many sections contain PDFs, notices, forms, programme information, faculty profiles, timetables, syllabi and reports.",
+    "source_url": "https://abmspcoerpune.org/",
+    "source_title": "Official home page / site navigation",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_structure"
+  },
+  {
+    "id": "admissions.masters",
+    "category": "admissions",
+    "question_variants": [
+      "How do I ask about ME or MCA admission?",
+      "Who handles postgraduate admissions?"
+    ],
+    "answer": "The ME/MCA admissions page lists course-specific inquiry contacts, including Prof. S. M. Gawande for M.E. Civil/Environmental Engineering, Dr. D. P. Kamble for M.E. Mechanical Engineering, Prof. Nitin Gaikwad for Electronics and Communication (VLSI Design), and Dr. Atul D. Newase for MCA. The page says admissions follow DTE and University of Pune norms; check current notices for current contacts and eligibility.",
+    "source_url": "https://abmspcoerpune.org/m-e-first-year-post-graduates/",
+    "source_title": "ME/MCA First Year (Postgraduation)",
+    "retrieved_on": "2026-10-21",
+    "status": "official_site_claim"
+  }
+]

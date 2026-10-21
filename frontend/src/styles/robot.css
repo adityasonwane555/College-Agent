@@ -1,0 +1,356 @@
+/* Robot Chassis & Container */
+.robot-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+  user-select: none;
+}
+
+/* Floating breathing motion */
+.robot-head-wrapper {
+  animation: robot-breathe 4.5s ease-in-out infinite;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes robot-breathe {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Antenna Ears */
+.robot-antenna {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 48px;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 8px;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.robot-antenna.left {
+  left: -10px;
+  transform: translateY(-50%) rotate(-5deg);
+}
+
+.robot-antenna.right {
+  right: -10px;
+  transform: translateY(-50%) rotate(5deg);
+}
+
+.robot-antenna-tip {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cyan-glow);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+.robot-head-wrapper.thinking .robot-antenna-tip {
+  background: var(--violet-glow);
+  box-shadow: 0 0 16px var(--violet-glow);
+  animation: antenna-pulse 1s infinite alternate;
+}
+
+.robot-head-wrapper.listening .robot-antenna-tip {
+  background: var(--cyan-glow);
+  box-shadow: 0 0 18px var(--cyan-glow);
+  animation: antenna-pulse 0.6s infinite alternate;
+}
+
+@keyframes antenna-pulse {
+  from { opacity: 0.6; transform: translateX(-50%) scale(0.9); }
+  to { opacity: 1; transform: translateX(-50%) scale(1.2); }
+}
+
+/* Outer Helmet Chassis */
+.robot-helmet {
+  width: 310px;
+  height: 250px;
+  background: linear-gradient(145deg, #1a2234 0%, #0c1220 100%);
+  border-radius: 65px;
+  padding: 16px;
+  border: 2px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.7),
+    inset 0 2px 4px rgba(255, 255, 255, 0.15),
+    0 0 35px rgba(0, 240, 255, 0.15);
+  position: relative;
+  z-index: 2;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.robot-helmet.listening {
+  border-color: var(--cyan-glow);
+  box-shadow: 0 0 45px rgba(0, 240, 255, 0.35);
+}
+
+.robot-helmet.thinking {
+  border-color: var(--violet-glow);
+  box-shadow: 0 0 45px rgba(168, 85, 247, 0.35);
+}
+
+.robot-helmet.happy {
+  border-color: #38bdf8;
+  box-shadow: 0 0 45px rgba(56, 189, 248, 0.35);
+}
+
+.robot-helmet.error {
+  border-color: var(--rose-glow);
+  box-shadow: 0 0 45px rgba(244, 63, 94, 0.35);
+}
+
+/* Visor Screen */
+.robot-visor {
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% 50%, #050b16 0%, #020409 100%);
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Glass Reflection across Visor */
+.robot-visor::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, transparent 100%);
+  border-top-left-radius: 50px;
+  border-top-right-radius: 50px;
+  pointer-events: none;
+}
+
+/* Eyes Container */
+.robot-eyes-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 50px;
+  margin-top: 15px;
+  position: relative;
+}
+
+/* Individual Eye */
+.robot-eye {
+  width: 58px;
+  height: 72px;
+  background: #00f0ff;
+  border-radius: 36px;
+  box-shadow: 
+    0 0 20px #00f0ff,
+    0 0 40px rgba(0, 240, 255, 0.6);
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+/* Natural Periodic Blinking */
+.robot-eye.blinking {
+  transform: scaleY(0.08);
+}
+
+/* Eye Pupil Highlight */
+.robot-eye-pupil {
+  position: absolute;
+  width: 20px;
+  height: 24px;
+  background: #ffffff;
+  border-radius: 50%;
+  top: 12px;
+  left: 14px;
+  box-shadow: 0 0 10px #ffffff;
+  transition: all 0.2s ease;
+}
+
+/* Eye States */
+/* LISTENING */
+.robot-head-wrapper.listening .robot-eye {
+  height: 78px;
+  box-shadow: 0 0 30px #00f0ff, 0 0 50px rgba(0, 240, 255, 0.8);
+}
+
+/* THINKING (Looking Up / Purple Aura) */
+.robot-head-wrapper.thinking .robot-eye {
+  background: #c084fc;
+  box-shadow: 0 0 25px #c084fc, 0 0 45px rgba(192, 132, 252, 0.7);
+  transform: translateY(-8px);
+}
+
+.robot-head-wrapper.thinking .robot-eye-pupil {
+  top: 6px;
+  left: 20px;
+}
+
+/* HAPPY (Arched Crescent Smiling Eyes) */
+.robot-head-wrapper.happy .robot-eye {
+  height: 48px;
+  border-radius: 36px 36px 8px 8px;
+  transform: scaleY(0.7) translateY(4px);
+  background: #38bdf8;
+  box-shadow: 0 0 25px #38bdf8;
+}
+
+/* ERROR (Sympathetic Soft Amber/Red) */
+.robot-head-wrapper.error .robot-eye {
+  background: #f87171;
+  box-shadow: 0 0 25px #f87171;
+  height: 60px;
+}
+
+/* Cheek Blushes */
+.robot-cheeks-row {
+  display: flex;
+  justify-content: space-between;
+  width: 210px;
+  position: absolute;
+  top: 135px;
+  pointer-events: none;
+}
+
+.robot-cheek {
+  width: 22px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(244, 63, 94, 0.25);
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.3);
+  opacity: 0.5;
+  transition: all 0.3s ease;
+}
+
+.robot-head-wrapper.happy .robot-cheek {
+  opacity: 1;
+  background: rgba(244, 63, 94, 0.65);
+  box-shadow: 0 0 18px rgba(244, 63, 94, 0.8);
+}
+
+/* Mouth Section */
+.robot-mouth-container {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+}
+
+.robot-mouth-line {
+  width: 44px;
+  height: 8px;
+  background: #00f0ff;
+  border-radius: 10px;
+  box-shadow: 0 0 12px #00f0ff;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Speaking mouth oscillation */
+.robot-head-wrapper.speaking .robot-mouth-line {
+  animation: speaking-mouth 0.28s ease-in-out infinite alternate;
+}
+
+@keyframes speaking-mouth {
+  0% {
+    width: 32px;
+    height: 8px;
+    border-radius: 10px;
+  }
+  50% {
+    width: 46px;
+    height: 22px;
+    border-radius: 16px;
+  }
+  100% {
+    width: 38px;
+    height: 14px;
+    border-radius: 12px;
+  }
+}
+
+/* Happy smile mouth */
+.robot-head-wrapper.happy .robot-mouth-line {
+  width: 52px;
+  height: 16px;
+  border-radius: 0 0 30px 30px;
+  background: #38bdf8;
+  box-shadow: 0 0 16px #38bdf8;
+}
+
+/* Thinking mouth */
+.robot-head-wrapper.thinking .robot-mouth-line {
+  width: 24px;
+  height: 6px;
+  background: #c084fc;
+  box-shadow: 0 0 12px #c084fc;
+}
+
+/* Audio Waveform Bars */
+.waveform-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+}
+
+.waveform-bar {
+  width: 4px;
+  background: linear-gradient(180deg, var(--cyan-glow) 0%, #38bdf8 100%);
+  border-radius: 4px;
+  box-shadow: 0 0 8px var(--cyan-glow);
+  animation: wave-bounce 0.8s ease-in-out infinite alternate;
+}
+
+.waveform-bar:nth-child(1) { height: 10px; animation-delay: 0.1s; }
+.waveform-bar:nth-child(2) { height: 22px; animation-delay: 0.25s; }
+.waveform-bar:nth-child(3) { height: 16px; animation-delay: 0.15s; }
+.waveform-bar:nth-child(4) { height: 26px; animation-delay: 0.35s; }
+.waveform-bar:nth-child(5) { height: 14px; animation-delay: 0.2s; }
+.waveform-bar:nth-child(6) { height: 20px; animation-delay: 0.3s; }
+.waveform-bar:nth-child(7) { height: 8px;  animation-delay: 0.05s; }
+
+@keyframes wave-bounce {
+  0% { transform: scaleY(0.3); opacity: 0.6; }
+  100% { transform: scaleY(1.1); opacity: 1; }
+}
+
+/* Thinking Celestial Halo Ring */
+.thinking-halo {
+  position: absolute;
+  top: -24px;
+  width: 140px;
+  height: 28px;
+  border: 2px solid var(--violet-glow);
+  border-radius: 50%;
+  box-shadow: 0 0 20px var(--violet-glow);
+  animation: halo-spin 3s linear infinite;
+  opacity: 0.85;
+}
+
+@keyframes halo-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
