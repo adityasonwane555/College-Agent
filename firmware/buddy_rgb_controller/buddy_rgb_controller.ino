@@ -25,6 +25,21 @@ const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 // Leave empty ("") to disable token verification for simple local use.
 const char* API_TOKEN     = ""; 
 
+// --- Dual-Port Universal Serial Logging ---
+// When USB CDC On Boot is Enabled, Serial is routed to native USB.
+// Serial0 remains connected to hardware UART0 (the COM/UART USB-C port).
+#if ARDUINO_USB_CDC_ON_BOOT
+  #define LOG_PRINT(x)        do { Serial.print(x);   Serial0.print(x);   } while(0)
+  #define LOG_PRINTLN(x)      do { Serial.println(x); Serial0.println(x); } while(0)
+  #define LOG_PRINTLN_EMPTY() do { Serial.println();  Serial0.println();  } while(0)
+  #define LOG_PRINTF(...)     do { Serial.printf(__VA_ARGS__); Serial0.printf(__VA_ARGS__); } while(0)
+#else
+  #define LOG_PRINT(x)        Serial.print(x)
+  #define LOG_PRINTLN(x)      Serial.println(x)
+  #define LOG_PRINTLN_EMPTY() Serial.println()
+  #define LOG_PRINTF(...)     Serial.printf(__VA_ARGS__)
+#endif
+
 // ========================== STATE DEFINITIONS ==========================
 enum LedState {
   STATE_BOOTING,
@@ -340,19 +355,30 @@ void checkWiFiConnection() {
 
 // ========================== SETUP & LOOP ==========================
 void setup() {
+  // 1. Instant hardware visual feedback: soft white blip confirms CPU entered setup()
+  rgbLedWrite(RGB_LED_PIN, 40, 40, 40);
+
+  // 2. Initialize primary Serial port
   Serial.begin(115200);
-  delay(500);
 
-  Serial.println("\n=============================================");
-  Serial.println("  BUDDY AI - Speech-Reactive RGB Controller  ");
-  Serial.println("=============================================");
+#if ARDUINO_USB_CDC_ON_BOOT
+  // When USB CDC On Boot is Enabled, Serial is Native USB.
+  // We initialize Serial0 so logs also appear on the hardware UART0 / COM port!
+  Serial0.begin(115200);
+#endif
 
-  // Initialize Onboard WS2812 LED on GPIO 48
+  delay(400);
   setLedColor(0, 0, 0);
+
+  LOG_PRINTLN("\n=============================================");
+  LOG_PRINTLN("  BUDDY AI - Speech-Reactive RGB Controller  ");
+  LOG_PRINTLN("=============================================");
+
+  // Initialize Onboard WS2812 LED into BOOTING state
   transitionTo(STATE_BOOTING);
 
   // Connect to Wi-Fi
-  Serial.printf("[Wi-Fi] Connecting to '%s'...\n", WIFI_SSID);
+  LOG_PRINTF("[Wi-Fi] Connecting to '%s'...\n", WIFI_SSID);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -360,16 +386,16 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 15000) {
     renderLedAnimation();
     delay(20);
-    Serial.print(".");
+    LOG_PRINT(".");
   }
-  Serial.println();
+  LOG_PRINTLN_EMPTY();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("[Wi-Fi] Connected successfully!");
-    Serial.printf("[Wi-Fi] IP Address:  http://%s\n", WiFi.localIP().toString().c_str());
-    Serial.printf("[Wi-Fi] Signal (RSSI): %d dBm\n", WiFi.RSSI());
+    LOG_PRINTLN("[Wi-Fi] Connected successfully!");
+    LOG_PRINTF("[Wi-Fi] IP Address:  http://%s\n", WiFi.localIP().toString().c_str());
+    LOG_PRINTF("[Wi-Fi] Signal (RSSI): %d dBm\n", WiFi.RSSI());
   } else {
-    Serial.println("[Wi-Fi] Warning: Connection timed out. Running in offline fallback.");
+    LOG_PRINTLN("[Wi-Fi] Warning: Connection timed out. Running in offline fallback.");
   }
 
   // Register HTTP Endpoints
@@ -383,8 +409,8 @@ void setup() {
   });
 
   server.begin();
-  Serial.println("[Server] HTTP API ready on port " + String(HTTP_PORT));
-  Serial.println("[Server] Endpoints: /health, /api/status, /api/state [POST]");
+  LOG_PRINTLN("[Server] HTTP API ready on port " + String(HTTP_PORT));
+  LOG_PRINTLN("[Server] Endpoints: /health, /api/status, /api/state [POST]");
 }
 
 void loop() {

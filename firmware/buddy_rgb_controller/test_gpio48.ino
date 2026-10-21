@@ -12,9 +12,25 @@ void setColor(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void setup() {
+  // Instant visual feedback that CPU has entered setup()
+  rgbLedWrite(RGB_LED_PIN, 40, 40, 40); // Soft white startup blip
+
+  // Initialize primary Serial
   Serial.begin(115200);
-  delay(1000);
-  Serial.println("BUDDY ESP32-S3 GPIO 48 RGB LED Quick Test");
+
+#if ARDUINO_USB_CDC_ON_BOOT
+  // When USB CDC On Boot is Enabled, Serial is Native USB.
+  // Initialize Serial0 so logs also appear on the hardware UART/COM port!
+  Serial0.begin(115200);
+#endif
+
+  delay(600);
+  setColor(0, 0, 0);
+
+  Serial.println("\nBUDDY ESP32-S3 GPIO 48 RGB LED Quick Test Started!");
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial0.println("\nBUDDY ESP32-S3 GPIO 48 RGB LED Quick Test Started!");
+#endif
 }
 
 void loop() {

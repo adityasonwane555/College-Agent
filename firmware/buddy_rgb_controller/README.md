@@ -64,14 +64,17 @@ Complete hardware guide and firmware instructions for connecting your **ESP32-S3
      ```
    - Go to **Tools** > **Board** > **Boards Manager**, search for `esp32` by Espressif Systems, and click **Install** (version 2.0.14+ or 3.0.x).
 
-2. **Select Board Profile**:
+2. **Select Board Profile & Settings**:
    - **Board**: `ESP32S3 Dev Module`
-   - **Port**: Select your active COM port (e.g., `COM3`, `COM4`, etc.)
-   - **USB CDC On Boot**: `Enabled` (for Serial output)
-   - **Flash Size**: `16MB (128Mb)`
-   - **Partition Scheme**: `16M Flash (3MB APP / 9.9MB FAT)` or `Default 4MB with spiffs`
-   - **PSRAM**: `OPI PSRAM` (for 8MB Octal PSRAM)
-   - **Upload Speed**: `921600`
+   - **Port**: Select your active COM port
+   - **USB CDC On Boot**:
+     - Set to **`Disabled`** if your USB cable is plugged into the **COM / UART** port (CP2102/CH340 bridge chip).
+     - Set to **`Enabled`** if your USB cable is plugged directly into the native **USB** port.
+   - **Flash Mode**: **`DIO 80MHz`** (ESP32-S3 default SPI bootloader mode)
+   - **Flash Size**: **`16MB (128Mb)`**
+   - **Partition Scheme**: **`16M Flash (3MB APP / 9.9MB FAT)`** or `Default 4MB with spiffs`
+   - **PSRAM**: **`OPI PSRAM`** (for N16R8 Octal PSRAM)
+   - **Upload Speed**: `921600` (or `115200` for extra stability)
 
 ---
 
