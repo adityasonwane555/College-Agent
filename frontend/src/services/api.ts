@@ -71,12 +71,18 @@ export const api = {
   },
 
   // Hardware ESP32-S3 RGB LED Control
-  async setLedState(state: string, amplitude: number = 0.0): Promise<void> {
+  async setLedState(
+    state: string,
+    amplitude: number = 0.0,
+    bass?: number,
+    mid?: number,
+    treble?: number
+  ): Promise<void> {
     try {
       await fetch(`${API_BASE}/hardware/led-state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, amplitude })
+        body: JSON.stringify({ state, amplitude, bass, mid, treble })
       });
     } catch {
       // Non-blocking: never disrupt voice or UI if offline

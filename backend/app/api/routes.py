@@ -45,6 +45,9 @@ class SpeakRequest(BaseModel):
 class LedStateRequest(BaseModel):
     state: str
     amplitude: Optional[float] = 0.0
+    bass: Optional[float] = None
+    mid: Optional[float] = None
+    treble: Optional[float] = None
 
 
 class AdminLoginRequest(BaseModel):
@@ -269,7 +272,13 @@ def add_announcement(ann: AnnouncementModel, auth: bool = Depends(verify_admin_t
 @router.post("/hardware/led-state")
 def set_hardware_led(req: LedStateRequest):
     """Updates the ESP32-S3 onboard RGB LED state over local Wi-Fi."""
-    success = rgb_controller.set_state(req.state, req.amplitude or 0.0)
+    success = rgb_controller.set_state(
+        req.state,
+        req.amplitude or 0.0,
+        req.bass,
+        req.mid,
+        req.treble
+    )
     return {"ok": success, "state": req.state}
 
 

@@ -91,15 +91,35 @@ class RGBController:
                 self._has_work.clear()
 
             if payload:
-                self._dispatch_sync(payload["state"], payload.get("amplitude", 0.0))
+                self._dispatch_sync(
+                    payload["state"],
+                    payload.get("amplitude", 0.0),
+                    payload.get("bass"),
+                    payload.get("mid"),
+                    payload.get("treble")
+                )
 
-    def _dispatch_sync(self, state: str, amplitude: float = 0.0) -> bool:
+    def _dispatch_sync(
+        self,
+        state: str,
+        amplitude: float = 0.0,
+        bass: Optional[float] = None,
+        mid: Optional[float] = None,
+        treble: Optional[float] = None
+    ) -> bool:
         """Performs synchronous HTTP POST to ESP32 /api/state."""
         if not self.enabled:
             return False
 
         url = f"{self.base_url}/api/state"
-        body = {"state": state, "amplitude": round(amplitude, 2)}
+        body: Dict[str, Any] = {"state": state, "amplitude": round(amplitude, 2)}
+        if bass is not None:
+            body["bass"] = round(bass, 2)
+        if mid is not None:
+            body["mid"] = round(mid, 2)
+        if treble is not None:
+            body["treble"] = round(treble, 2)
+
         headers = {"Content-Type": "application/json"}
         if self.token:
             headers["Authorization"] = self.token
@@ -133,7 +153,14 @@ class RGBController:
             raise ValueError(f"Invalid state '{state}'. Valid states: {sorted(list(VALID_STATES))}")
         return s
 
-    def set_state(self, state: str, amplitude: float = 0.0) -> bool:
+    def set_state(
+        self,
+        state: str,
+        amplitude: float = 0.0,
+        bass: Optional[float] = None,
+        mid: Optional[float] = None,
+        treble: Optional[float] = None
+    ) -> bool:
         """
         Non-blocking API: Enqueues a state update and returns immediately (<0.1ms).
         Ensures the AI voice playback and reasoning pipelines are never stalled.
@@ -147,7 +174,7 @@ class RGBController:
         self.current_state = norm_state
         self.current_amplitude = amplitude
 
-        # Suppress identical duplicates (unless amplitude changed significantly during SPEAKING)
+        # Suppress identical duplicates (unless frequency or amplitude changed during SPEAKING)
         if (
             norm_state == self.last_sent_state
             and abs(amplitude - self.last_sent_amplitude) < 0.15
@@ -159,7 +186,13 @@ class RGBController:
             return True
 
         with self._lock:
-            self._pending_update = {"state": norm_state, "amplitude": amplitude}
+            self._pending_update = {
+                "state": norm_state,
+                "amplitude": amplitude,
+                "bass": bass,
+                "mid": mid,
+                "treble": treble
+            }
             self._has_work.set()
 
         return True

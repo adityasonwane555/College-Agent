@@ -59,9 +59,23 @@ def test_status(url: str):
         print("       and check the IP printed in its Serial Monitor.")
 
 
-def send_state(url: str, state: str, amplitude: float = 0.0) -> bool:
+def send_state(
+    url: str,
+    state: str,
+    amplitude: float = 0.0,
+    bass: float = None,
+    mid: float = None,
+    treble: float = None
+) -> bool:
     target_url = f"{url}/api/state"
     payload = {"state": state, "amplitude": amplitude}
+    if bass is not None:
+        payload["bass"] = bass
+    if mid is not None:
+        payload["mid"] = mid
+    if treble is not None:
+        payload["treble"] = treble
+
     try:
         with httpx.Client(timeout=2.0) as client:
             resp = client.post(target_url, json=payload)
@@ -88,27 +102,80 @@ def run_cycle(url: str, delay_sec: float = 2.5):
     print("[+] Test cycle completed successfully!")
 
 
+def run_equalizer_demo(url: str, duration_sec: float = 12.0):
+    import math
+    print(f"\n=== Running High/Low Note Speaker Equalizer Demo on {url} ({duration_sec}s) ===")
+    print("Watch the LED:")
+    print("  - Vowels / Low notes: Punchy Crimson/Magenta subwoofer kicks")
+    print("  - Speech body: Vibrant Royal Purple/Violet cadence")
+    print("  - Consonants / High notes: Crisp Electric Cyan/White staccato sparks")
+    print("-------------------------------------------------------------------------")
+
+    t_start = time.time()
+    tick = 0
+    try:
+        while time.time() - t_start < duration_sec:
+            tick += 1
+            t = time.time() - t_start
+
+            # Natural vocal modulation patterns
+            # Low notes (vowel bass resonance: "ah", "oh", "oo")
+            bass = 0.3 + 0.7 * abs(math.sin(t * 4.2))
+            # Mid notes (speech body & syllabic cadence: 3.5 syllables per sec)
+            mid = 0.4 + 0.6 * abs(math.cos(t * 7.5))
+            # High notes (crisp consonant bursts: "s", "t", "ch", "k")
+            treble = 0.95 if (tick % 4 == 0) else (0.15 + 0.35 * abs(math.sin(t * 13.0)))
+            # Master volume envelope
+            amp = 0.5 + 0.5 * abs(math.sin(t * 5.0))
+
+            send_state(url, "SPEAKING", amplitude=amp, bass=bass, mid=mid, treble=treble)
+            time.sleep(0.08) # ~12 updates per second
+
+    except KeyboardInterrupt:
+        pass
+
+    print("\n--> Equalizer demo finished. Returning to IDLE...")
+    send_state(url, "IDLE")
+    print("[+] Equalizer test complete!")
+
+
 def main():
+    import os
+    from pathlib import Path
+
+    # Try reading default URL from .env if present
+    default_url = "http://10.51.80.118"
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("ESP32_LED_URL="):
+                default_url = line.split("=", 1)[1].strip()
+
     parser = argparse.ArgumentParser(description="Test BUDDY AI ESP32 RGB LED Controller")
-    parser.add_argument("--url", default="http://192.168.1.100", help="ESP32 IP or base URL (e.g. http://192.168.1.105)")
+    parser.add_argument("--url", default=default_url, help=f"ESP32 IP or base URL (default from .env: {default_url})")
     parser.add_argument("--state", choices=VALID_STATES, help="Send a single specific state to the ESP32")
     parser.add_argument("--amplitude", type=float, default=0.0, help="Optional audio amplitude (0.0 - 1.0) for SPEAKING state")
+    parser.add_argument("--bass", type=float, default=None, help="Low notes intensity (0.0 - 1.0)")
+    parser.add_argument("--mid", type=float, default=None, help="Mid notes intensity (0.0 - 1.0)")
+    parser.add_argument("--treble", type=float, default=None, help="High notes intensity (0.0 - 1.0)")
     parser.add_argument("--status", action="store_true", help="Check device health and status")
     parser.add_argument("--cycle", action="store_true", help="Cycle through all animation states in sequence")
+    parser.add_argument("--equalizer", action="store_true", help="Run real-time speaker equalizer simulation (high & low notes)")
 
     args = parser.parse_args()
     base_url = args.url.rstrip("/")
 
     if args.status:
         test_status(base_url)
+    elif args.equalizer:
+        run_equalizer_demo(base_url)
     elif args.state:
-        send_state(base_url, args.state, args.amplitude)
+        send_state(base_url, args.state, args.amplitude, args.bass, args.mid, args.treble)
     elif args.cycle:
         run_cycle(base_url)
     else:
-        # Default action: check status and prompt
         test_status(base_url)
-        print("\nTip: Use --cycle to view all animations, or --state <NAME> to set a specific state.")
+        print("\nTip: Use --equalizer to see the high/low speaker effect, or --cycle to view all animations.")
 
 
 if __name__ == "__main__":

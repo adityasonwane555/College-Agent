@@ -264,6 +264,22 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         setIsSpeaking(true);
         onStateChange('speaking');
         api.setLedState('SPEAKING');
+
+        // Dynamic Equalizer Modulation (~10 Hz)
+        // Blinks and pulses high/low notes in rhythm with speech cadence without touching audio playback
+        let tick = 0;
+        const eqInterval = window.setInterval(() => {
+          if (currentAudioRef.current !== audio || audio.paused) {
+            clearInterval(eqInterval);
+            return;
+          }
+          tick++;
+          const bass = 0.35 + 0.65 * Math.abs(Math.sin(tick * 0.45));
+          const mid = 0.40 + 0.60 * Math.abs(Math.cos(tick * 0.75));
+          const treble = (tick % 3 === 0) ? 0.95 : (0.15 + 0.35 * Math.abs(Math.sin(tick * 1.3)));
+          const amp = 0.50 + 0.50 * Math.abs(Math.sin(tick * 0.55));
+          api.setLedState('SPEAKING', amp, bass, mid, treble);
+        }, 100);
       };
 
       // Audio playback completion: Transition hardware LED to COMPLETED then IDLE
