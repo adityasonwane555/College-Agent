@@ -9,6 +9,52 @@ interface SettingsPanelProps {
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, health, onClose }) => {
+  const [audioOutputs, setAudioOutputs] = React.useState<MediaDeviceInfo[]>([]);
+  const [selectedOutputId, setSelectedOutputId] = React.useState<string>(() => {
+    return localStorage.getItem('buddy_audio_output_id') || 'default';
+  });
+  const [isTestingSpeaker, setIsTestingSpeaker] = React.useState(false);
+
+  React.useEffect(() => {
+    const fetchDevices = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const outputs = devices.filter(d => d.kind === 'audiooutput');
+        setAudioOutputs(outputs);
+      } catch (err) {
+        console.warn("Could not enumerate audio devices:", err);
+      }
+    };
+    fetchDevices();
+    navigator.mediaDevices?.addEventListener('devicechange', fetchDevices);
+    return () => {
+      navigator.mediaDevices?.removeEventListener('devicechange', fetchDevices);
+    };
+  }, []);
+
+  const handleSpeakerChange = (deviceId: string) => {
+    setSelectedOutputId(deviceId);
+    localStorage.setItem('buddy_audio_output_id', deviceId);
+  };
+
+  const testSpeaker = async () => {
+    setIsTestingSpeaker(true);
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+        const u = new SpeechSynthesisUtterance("Bluetooth speaker connected! Buddy voice test successful.");
+        u.rate = 1.05;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (err) {
+      console.warn("Test audio error:", err);
+    } finally {
+      setTimeout(() => setIsTestingSpeaker(false), 2500);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content glass-panel" onClick={(e) => e.stopPropagation()}>
@@ -135,6 +181,65 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, health, on
               >
                 Test Cyan (Idle)
               </button>
+            </div>
+          </div>
+
+          {/* Audio Output / Bluetooth Speaker Selector */}
+          <div style={{
+            gridColumn: '1 / -1',
+            padding: '12px',
+            borderRadius: '12px',
+            background: 'rgba(15, 23, 42, 0.6)',
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#38bdf8' }}>
+                <Volume2 size={15} />
+                Audio Output & Bluetooth Speaker
+              </div>
+              <button
+                type="button"
+                onClick={testSpeaker}
+                disabled={isTestingSpeaker}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  background: isTestingSpeaker ? '#64748b' : 'linear-gradient(135deg, #0284c7, #06b6d4)',
+                  color: '#fff',
+                  border: 'none',
+                  cursor: isTestingSpeaker ? 'wait' : 'pointer'
+                }}
+              >
+                {isTestingSpeaker ? 'Playing...' : 'Test Speaker 🔊'}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={selectedOutputId}
+                onChange={(e) => handleSpeakerChange(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#f8fafc',
+                  fontSize: '12px'
+                }}
+              >
+                <option value="default">Default System Audio (Windows Selected)</option>
+                {audioOutputs.map((device, idx) => (
+                  <option key={device.deviceId || idx} value={device.deviceId}>
+                    {device.label || `Speaker / Audio Output ${idx + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', lineHeight: 1.4 }}>
+              Pair your Bluetooth speaker in <strong>Windows Settings → Bluetooth & devices</strong>. Select it here or leave as <em>Default System Audio</em> to broadcast BUDDY's voice wirelessly.
             </div>
           </div>
         </div>

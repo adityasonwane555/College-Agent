@@ -257,6 +257,14 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       console.log("[Voice] Playing audio from:", fullUrl);
       const audio = new Audio(fullUrl);
       audio.volume = 1.0;
+      const savedSinkId = localStorage.getItem('buddy_audio_output_id');
+      if (savedSinkId && savedSinkId !== 'default' && 'setSinkId' in HTMLMediaElement.prototype) {
+        try {
+          await (audio as any).setSinkId(savedSinkId);
+        } catch (e) {
+          console.warn("[Voice] Could not set audio output sink:", e);
+        }
+      }
       currentAudioRef.current = audio;
 
       // Audio playback start: Transition hardware LED to SPEAKING state
