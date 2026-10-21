@@ -50,17 +50,12 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const speechHeartbeatRef = useRef<number | null>(null);
-  const ampMeterIntervalRef = useRef<number | null>(null);
 
   // Stop current speech playback
   const stopSpeaking = useCallback(() => {
     if (speechHeartbeatRef.current) {
       clearInterval(speechHeartbeatRef.current);
       speechHeartbeatRef.current = null;
-    }
-    if (ampMeterIntervalRef.current) {
-      clearInterval(ampMeterIntervalRef.current);
-      ampMeterIntervalRef.current = null;
     }
     activeUtterancesRef.current = [];
     if (currentAudioRef.current) {
@@ -174,7 +169,10 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       window.speechSynthesis.speak(utterance);
     };
 
-    speakChunk(0);
+    setTimeout(() => {
+      window.speechSynthesis.resume();
+      speakChunk(0);
+    }, 50);
   }, [onStateChange]);
 
   // Start Push-To-Talk Recording
@@ -256,8 +254,9 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     // Helper to play WAV/MP3 audio element
     const playAudioUrl = async (url: string) => {
       const fullUrl = `http://${API_HOST}:8000${url}`;
-      console.log("[Voice] Loading audio from:", fullUrl);
+      console.log("[Voice] Playing audio from:", fullUrl);
       const audio = new Audio(fullUrl);
+      audio.volume = 1.0;
       currentAudioRef.current = audio;
 
       // Audio playback start: Transition hardware LED to SPEAKING state
@@ -265,41 +264,10 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         setIsSpeaking(true);
         onStateChange('speaking');
         api.setLedState('SPEAKING');
-
-        // Optional Audio Amplitude Reactivity (Web Audio API)
-        try {
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          if (AudioContextClass) {
-            const ctx = new AudioContextClass();
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 64;
-            const source = ctx.createMediaElementSource(audio);
-            source.connect(analyser);
-            analyser.connect(ctx.destination);
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            ampMeterIntervalRef.current = window.setInterval(() => {
-              if (currentAudioRef.current !== audio || audio.paused) return;
-              analyser.getByteFrequencyData(dataArray);
-              let sum = 0;
-              for (let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
-              }
-              const avg = sum / (dataArray.length * 255.0);
-              api.setLedState('SPEAKING', avg);
-            }, 125); // ~8Hz smoothed amplitude
-          }
-        } catch {
-          // Graceful fallback to smooth breathing animation if audio context restricted
-        }
       };
 
       // Audio playback completion: Transition hardware LED to COMPLETED then IDLE
       audio.onended = () => {
-        if (ampMeterIntervalRef.current) {
-          clearInterval(ampMeterIntervalRef.current);
-          ampMeterIntervalRef.current = null;
-        }
         setIsSpeaking(false);
         currentAudioRef.current = null;
         onStateChange('idle');
@@ -307,10 +275,6 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       };
 
       audio.onerror = (e) => {
-        if (ampMeterIntervalRef.current) {
-          clearInterval(ampMeterIntervalRef.current);
-          ampMeterIntervalRef.current = null;
-        }
         console.warn("[Voice] Audio element failed to play, switching to browser speech:", e);
         setIsSpeaking(false);
         onStateChange('idle');
@@ -320,10 +284,6 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       try {
         await audio.play();
       } catch (err) {
-        if (ampMeterIntervalRef.current) {
-          clearInterval(ampMeterIntervalRef.current);
-          ampMeterIntervalRef.current = null;
-        }
         console.warn("[Voice] audio.play() rejected (autoplay policy), switching to browser speech:", err);
         setIsSpeaking(false);
         onStateChange('idle');
@@ -377,6 +337,7 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     utterance.onend = () => {
       api.setLedState('THINKING');
     };
+    window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
   }, [isMuted]);
 
