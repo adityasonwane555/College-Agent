@@ -19,6 +19,7 @@ from ..voice.transcription import transcribe_audio_file, is_whisper_installed
 from ..voice.synthesis import synthesize_speech, is_fish_tts_server_alive
 from ..voice.audio_utils import AUDIO_DIR
 from ..security.authentication import authenticate_admin, verify_admin_token
+from ..hardware.rgb_controller import rgb_controller
 
 router = APIRouter(prefix="/api")
 
@@ -39,6 +40,11 @@ class ChatResponse(BaseModel):
 
 class SpeakRequest(BaseModel):
     text: str
+
+
+class LedStateRequest(BaseModel):
+    state: str
+    amplitude: Optional[float] = 0.0
 
 
 class AdminLoginRequest(BaseModel):
@@ -91,6 +97,9 @@ async def chat_endpoint(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
+    # Notify hardware LED that reasoning/search has started
+    rgb_controller.set_state("THINKING")
+
     result = await orchestrator.run(
         user_message=req.message,
         session_id=req.session_id
@@ -123,6 +132,9 @@ async def chat_endpoint(req: ChatRequest):
 async def transcribe_voice(audio: UploadFile = File(...)):
     if not audio:
         raise HTTPException(status_code=400, detail="No audio file received.")
+
+    # Notify hardware LED that audio transcription has started
+    rgb_controller.set_state("THINKING")
 
     suffix = Path(audio.filename or "recording.wav").suffix or ".wav"
     temp_path = AUDIO_DIR / f"rec_{uuid.uuid4().hex[:8]}{suffix}"
@@ -251,3 +263,23 @@ def add_event(event: EventModel, auth: bool = Depends(verify_admin_token)):
 def add_announcement(ann: AnnouncementModel, auth: bool = Depends(verify_admin_token)):
     ann_id = repo.add_announcement(ann)
     return {"status": "saved", "id": ann_id}
+
+
+# --- Hardware RGB LED Endpoints ---
+@router.post("/hardware/led-state")
+def set_hardware_led(req: LedStateRequest):
+    """Updates the ESP32-S3 onboard RGB LED state over local Wi-Fi."""
+    success = rgb_controller.set_state(req.state, req.amplitude or 0.0)
+    return {"ok": success, "state": req.state}
+
+
+@router.get("/hardware/led-status")
+def get_hardware_led_status():
+    """Returns local controller status and Wi-Fi connection health to the ESP32."""
+    return rgb_controller.get_status()
+
+
+@router.post("/hardware/led-ping")
+def ping_hardware_led():
+    """Actively pings the ESP32-S3 microcontroller to verify network connectivity."""
+    return rgb_controller.test_connection()

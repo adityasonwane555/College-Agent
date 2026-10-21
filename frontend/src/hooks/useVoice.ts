@@ -50,77 +50,17 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const speechHeartbeatRef = useRef<number | null>(null);
-
-  // Start Push-To-Talk Recording
-  const startRecording = useCallback(async () => {
-    // Stop any ongoing playback
-    stopSpeaking();
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        // Stop audio tracks
-        stream.getTracks().forEach((track) => track.stop());
-        setIsRecording(false);
-
-        if (audioChunksRef.current.length === 0) {
-          onStateChange('idle');
-          return;
-        }
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        try {
-          onStateChange('thinking' as any);
-          const result = await api.transcribeAudio(audioBlob);
-          if (result.success && result.text) {
-            onTranscriptionComplete(result.text);
-          } else {
-            onError(result.error || "No speech detected in recording.");
-            onStateChange('idle');
-          }
-        } catch (err: any) {
-          onError(err.message || "Failed to transcribe audio.");
-          onStateChange('error');
-        }
-      };
-
-      recorder.start();
-      setIsRecording(true);
-      onStateChange('listening');
-    } catch (err: any) {
-      setIsRecording(false);
-      onStateChange('error');
-      if (err.name === 'NotAllowedError') {
-        onError("Microphone access was denied. Please allow microphone permissions in your browser.");
-      } else {
-        onError(`Microphone error: ${err.message}`);
-      }
-    }
-  }, [onStateChange, onTranscriptionComplete, onError]);
-
-  // Stop Recording
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-  }, []);
+  const ampMeterIntervalRef = useRef<number | null>(null);
 
   // Stop current speech playback
   const stopSpeaking = useCallback(() => {
     if (speechHeartbeatRef.current) {
       clearInterval(speechHeartbeatRef.current);
       speechHeartbeatRef.current = null;
+    }
+    if (ampMeterIntervalRef.current) {
+      clearInterval(ampMeterIntervalRef.current);
+      ampMeterIntervalRef.current = null;
     }
     activeUtterancesRef.current = [];
     if (currentAudioRef.current) {
@@ -130,7 +70,14 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    setIsSpeaking(false);
+    setIsSpeaking((wasSpeaking) => {
+      if (wasSpeaking) {
+        api.setLedState('INTERRUPTED');
+      } else {
+        api.setLedState('IDLE');
+      }
+      return false;
+    });
   }, []);
 
   // Multi-sentence chunked browser speech (prevents Chrome halting at periods/fullstops)
@@ -175,8 +122,10 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     let currentIndex = 0;
     let isCanceled = false;
 
+    // Trigger SPEAKING state on hardware LED immediately when speech playback starts
     setIsSpeaking(true);
     onStateChange('speaking');
+    api.setLedState('SPEAKING');
 
     // Chromium keep-alive heartbeat: Prevents speech engine pause after fullstop
     speechHeartbeatRef.current = window.setInterval(() => {
@@ -194,6 +143,7 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         activeUtterancesRef.current = [];
         setIsSpeaking(false);
         onStateChange('idle');
+        api.setLedState('COMPLETED');
         return;
       }
 
@@ -227,6 +177,77 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     speakChunk(0);
   }, [onStateChange]);
 
+  // Start Push-To-Talk Recording
+  const startRecording = useCallback(async () => {
+    // Stop any ongoing playback
+    stopSpeaking();
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // Stop audio tracks
+        stream.getTracks().forEach((track) => track.stop());
+        setIsRecording(false);
+
+        if (audioChunksRef.current.length === 0) {
+          onStateChange('idle');
+          api.setLedState('IDLE');
+          return;
+        }
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        try {
+          onStateChange('thinking' as any);
+          api.setLedState('THINKING');
+          const result = await api.transcribeAudio(audioBlob);
+          if (result.success && result.text) {
+            onTranscriptionComplete(result.text);
+          } else {
+            onError(result.error || "No speech detected in recording.");
+            onStateChange('idle');
+            api.setLedState('IDLE');
+          }
+        } catch (err: any) {
+          onError(err.message || "Failed to transcribe audio.");
+          onStateChange('error');
+          api.setLedState('ERROR');
+        }
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      onStateChange('listening');
+      api.setLedState('LISTENING');
+    } catch (err: any) {
+      setIsRecording(false);
+      onStateChange('error');
+      api.setLedState('ERROR');
+      if (err.name === 'NotAllowedError') {
+        onError("Microphone access was denied. Please allow microphone permissions in your browser.");
+      } else {
+        onError(`Microphone error: ${err.message}`);
+      }
+    }
+  }, [onStateChange, onTranscriptionComplete, onError, stopSpeaking]);
+
+  // Stop Recording
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
   // Play assistant voice
   const speak = useCallback(async (text: string, audioUrl?: string) => {
     if (isMuted) return;
@@ -239,18 +260,57 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       const audio = new Audio(fullUrl);
       currentAudioRef.current = audio;
 
+      // Audio playback start: Transition hardware LED to SPEAKING state
       audio.onplay = () => {
         setIsSpeaking(true);
         onStateChange('speaking');
+        api.setLedState('SPEAKING');
+
+        // Optional Audio Amplitude Reactivity (Web Audio API)
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            const ctx = new AudioContextClass();
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 64;
+            const source = ctx.createMediaElementSource(audio);
+            source.connect(analyser);
+            analyser.connect(ctx.destination);
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            ampMeterIntervalRef.current = window.setInterval(() => {
+              if (currentAudioRef.current !== audio || audio.paused) return;
+              analyser.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+              }
+              const avg = sum / (dataArray.length * 255.0);
+              api.setLedState('SPEAKING', avg);
+            }, 125); // ~8Hz smoothed amplitude
+          }
+        } catch {
+          // Graceful fallback to smooth breathing animation if audio context restricted
+        }
       };
 
+      // Audio playback completion: Transition hardware LED to COMPLETED then IDLE
       audio.onended = () => {
+        if (ampMeterIntervalRef.current) {
+          clearInterval(ampMeterIntervalRef.current);
+          ampMeterIntervalRef.current = null;
+        }
         setIsSpeaking(false);
         currentAudioRef.current = null;
         onStateChange('idle');
+        api.setLedState('COMPLETED');
       };
 
       audio.onerror = (e) => {
+        if (ampMeterIntervalRef.current) {
+          clearInterval(ampMeterIntervalRef.current);
+          ampMeterIntervalRef.current = null;
+        }
         console.warn("[Voice] Audio element failed to play, switching to browser speech:", e);
         setIsSpeaking(false);
         onStateChange('idle');
@@ -260,6 +320,10 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       try {
         await audio.play();
       } catch (err) {
+        if (ampMeterIntervalRef.current) {
+          clearInterval(ampMeterIntervalRef.current);
+          ampMeterIntervalRef.current = null;
+        }
         console.warn("[Voice] audio.play() rejected (autoplay policy), switching to browser speech:", err);
         setIsSpeaking(false);
         onStateChange('idle');
@@ -296,6 +360,7 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
 
   const playInstantAcknowledgment = useCallback(() => {
     if (isMuted || !('speechSynthesis' in window)) return;
+    api.setLedState('SPEAKING');
     const fillers = [
       "Looking into that for you!",
       "Checking the college records...",
@@ -309,6 +374,9 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     if (lockedVoiceRef.current) {
       utterance.voice = lockedVoiceRef.current;
     }
+    utterance.onend = () => {
+      api.setLedState('THINKING');
+    };
     window.speechSynthesis.speak(utterance);
   }, [isMuted]);
 

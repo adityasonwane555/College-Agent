@@ -70,6 +70,37 @@ export const api = {
     return res.json();
   },
 
+  // Hardware ESP32-S3 RGB LED Control
+  async setLedState(state: string, amplitude: number = 0.0): Promise<void> {
+    try {
+      await fetch(`${API_BASE}/hardware/led-state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, amplitude })
+      });
+    } catch {
+      // Non-blocking: never disrupt voice or UI if offline
+    }
+  },
+
+  async getLedStatus(): Promise<{ ok: boolean; state?: string; is_connected?: boolean }> {
+    try {
+      const res = await fetch(`${API_BASE}/hardware/led-status`);
+      return res.json();
+    } catch {
+      return { ok: false, is_connected: false };
+    }
+  },
+
+  async pingLed(): Promise<{ ok: boolean; message?: string }> {
+    try {
+      const res = await fetch(`${API_BASE}/hardware/led-ping`, { method: 'POST' });
+      return res.json();
+    } catch (e: any) {
+      return { ok: false, message: e.message };
+    }
+  },
+
   // College Data
   async getDepartments(): Promise<Department[]> {
     const res = await fetch(`${API_BASE}/college/departments`);

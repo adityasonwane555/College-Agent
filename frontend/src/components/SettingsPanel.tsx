@@ -85,6 +85,58 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ config, health, on
               )}
             </div>
           </div>
+
+          {/* Hardware ESP32-S3 RGB LED Status */}
+          <div style={{
+            gridColumn: '1 / -1',
+            padding: '12px',
+            borderRadius: '12px',
+            background: 'rgba(15, 23, 42, 0.6)',
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#c084fc' }}>
+                <Server size={15} />
+                ESP32-S3 Hardware RGB LED (GPIO 48)
+              </div>
+              <span style={{ fontSize: '11px', color: '#a855f7', background: 'rgba(168, 85, 247, 0.15)', padding: '2px 8px', borderRadius: '12px' }}>
+                Wi-Fi Synced
+              </span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>
+              Automatically synchronizes with Speech (Purple), Thinking (Amber), Listening (Blue), and Idle (Cyan).
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => fetch('http://127.0.0.1:8000/api/hardware/led-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: 'SPEAKING', amplitude: 0.8 }) }).catch(() => {})}
+                style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '6px', background: '#a855f7', color: '#fff', border: 'none', cursor: 'pointer' }}
+              >
+                Test Purple (Speaking)
+              </button>
+              <button
+                type="button"
+                onClick={() => fetch('http://127.0.0.1:8000/api/hardware/led-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: 'THINKING' }) }).catch(() => {})}
+                style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '6px', background: '#f59e0b', color: '#fff', border: 'none', cursor: 'pointer' }}
+              >
+                Test Amber (Thinking)
+              </button>
+              <button
+                type="button"
+                onClick={() => fetch('http://127.0.0.1:8000/api/hardware/led-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: 'LISTENING' }) }).catch(() => {})}
+                style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '6px', background: '#0284c7', color: '#fff', border: 'none', cursor: 'pointer' }}
+              >
+                Test Blue (Listening)
+              </button>
+              <button
+                type="button"
+                onClick={() => fetch('http://127.0.0.1:8000/api/hardware/led-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: 'IDLE' }) }).catch(() => {})}
+                style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '6px', background: '#06b6d4', color: '#fff', border: 'none', cursor: 'pointer' }}
+              >
+                Test Cyan (Idle)
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Configuration Overview */}

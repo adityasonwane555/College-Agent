@@ -77,6 +77,7 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
     and states work out-of-the-box.
     """
     last_msg = messages[-1]
+    last_role = last_msg.get("role")
     # If the last message was a tool result, synthesize the final spoken dialogue
     if last_role == "tool":
         tool_content = last_msg.get("content", "").strip()

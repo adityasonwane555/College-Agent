@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     MAX_TOOL_ITERATIONS: int = 5
     SESSION_MAX_HISTORY: int = 15
 
+    # ESP32-S3 Hardware RGB LED Controller
+    ESP32_LED_ENABLED: bool = True
+    ESP32_LED_URL: str = "http://192.168.1.100"  # Configurable in .env or via Web UI
+    ESP32_LED_TIMEOUT_SECONDS: float = 1.0
+    ESP32_LED_TOKEN: str = ""
+
     model_config = SettingsConfigDict(
         env_file=str(WORKSPACE_DIR / ".env"),
         env_file_encoding="utf-8",
