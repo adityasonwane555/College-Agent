@@ -3,7 +3,8 @@ import type {
   CollegeAnnouncement, FAQ, DocumentMeta, Citation
 } from '../types';
 
-export const API_HOST = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1';
+const rawHost = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1';
+export const API_HOST = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
 export const API_BASE = `http://${API_HOST}:8000/api`;
 
 export interface ChatApiResponse {

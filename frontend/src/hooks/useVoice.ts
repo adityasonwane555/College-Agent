@@ -85,11 +85,27 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       speechHeartbeatRef.current = null;
     }
 
-    const cleanText = text
-      .replace(/[*#_`\[\]~|]/g, '')
+    let cleanText = text
+      .replace(/[*#_`\[\]~|()[\]{}]/g, ' ')
       .replace(/https?:\/\/\S+/g, '')
       .replace(/\[Source:[^\]]*\]/gi, '')
       .replace(/\s+/g, ' ')
+      .trim();
+
+    // Ensure APCOER and institutional acronyms are pronounced letter-by-letter, never as joined words
+    cleanText = cleanText
+      .replace(/\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R['’]s\b/gi, "A, P, C, O, E, R's")
+      .replace(/\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R\b/gi, "A, P, C, O, E, R,")
+      .replace(/\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P['’]s\b/gi, "A, B, M, S, P's")
+      .replace(/\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P\b/gi, "A, B, M, S, P,")
+      .replace(/\bS[-.,\s]?P[-.,\s]?P[-.,\s]?U\b/gi, "S, P, P, U,")
+      .replace(/\bD[-.,\s]?T[-.,\s]?E\b/gi, "D, T, E,")
+      .replace(/\bA[-.,\s]?I[-.,\s]?C[-.,\s]?T[-.,\s]?E\b/gi, "A, I, C, T, E,")
+      .replace(/\bH[-.,\s]?O[-.,\s]?D\b/gi, "H, O, D,")
+      .replace(/\bT[-.,\s]?P[-.,\s]?O\b/gi, "T, P, O,")
+      .replace(/,\s*,+/g, ',')
+      .replace(/\s+,/g, ',')
+      .replace(/,\s*([.!?:;])/g, '$1')
       .trim();
 
     if (!cleanText) return;

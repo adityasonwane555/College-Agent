@@ -13,11 +13,11 @@ import './styles/global.css';
 import './styles/robot.css';
 
 const SUGGESTIONS = [
-  "Where is the Computer Science Department?",
-  "What are the college library and office hours?",
-  "Tell me about B.Tech admission eligibility and fees.",
-  "Are there any upcoming events or hackathons?",
-  "Where is the Principal Office and Registrar Room?"
+  "What is our college name and heritage?",
+  "Who is the Principal and where is his office?",
+  "Tell me about B.Tech admissions under DTE Code 6794.",
+  "Which engineering branches are offered at APCOER?",
+  "What companies visit for campus placements?"
 ];
 
 export const App: React.FC = () => {
@@ -33,20 +33,35 @@ export const App: React.FC = () => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   // Load backend health and config on mount
-  const refreshSystemData = useCallback(async () => {
+  const refreshSystemData = useCallback(async (): Promise<boolean> => {
     try {
       const [h, c] = await Promise.all([api.getHealth(), api.getConfig()]);
       setHealth(h);
       setConfig(c);
+      return true;
     } catch (e) {
       console.warn("Backend not reachable yet:", e);
+      setHealth(null);
+      return false;
     }
   }, []);
 
   useEffect(() => {
-    refreshSystemData();
-    const interval = setInterval(refreshSystemData, 15000);
-    return () => clearInterval(interval);
+    let active = true;
+    let timer: number;
+
+    const poll = async () => {
+      const ok = await refreshSystemData();
+      if (!active) return;
+      // Fast retry (2.5s) if backend is still connecting/offline, otherwise standard refresh (10s)
+      timer = window.setTimeout(poll, ok ? 10000 : 2500);
+    };
+
+    poll();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [refreshSystemData]);
 
   // Voice Interaction Hook
