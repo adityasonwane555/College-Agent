@@ -14,7 +14,10 @@ STOP_WORDS = {
 def extract_keywords(query: str) -> List[str]:
     """Extracts non-stopword alphanumeric search terms from query."""
     words = re.findall(r"\b[a-zA-Z0-9_\-\.]{3,}\b", query.lower())
-    return [w for w in words if w not in STOP_WORDS]
+    filtered = [w for w in words if w not in STOP_WORDS]
+    if not filtered:
+        filtered = [w for w in words if w in {"college", "campus", "pune", "apcoer", "abmsp"}]
+    return filtered
 
 
 def calculate_score(query_terms: List[str], text: str) -> float:
@@ -29,7 +32,7 @@ def calculate_score(query_terms: List[str], text: str) -> float:
     return round(matches / len(query_terms), 2)
 
 
-def search_documents(query: str, top_k: int = 3, threshold: float = 0.3) -> List[Dict[str, Any]]:
+def search_documents(query: str, top_k: int = 3, threshold: float = 0.25) -> List[Dict[str, Any]]:
     """
     Searches indexed college documents.
     Returns ranked passages with citations and page numbers.
@@ -39,7 +42,7 @@ def search_documents(query: str, top_k: int = 3, threshold: float = 0.3) -> List
     if not terms:
         return []
 
-    candidate_chunks = repo.search_chunks(terms, limit=15)
+    candidate_chunks = repo.search_chunks(terms, limit=50)
     scored_results = []
 
     for chunk in candidate_chunks:

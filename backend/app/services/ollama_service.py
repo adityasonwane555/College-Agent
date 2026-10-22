@@ -22,7 +22,7 @@ async def is_ollama_online() -> bool:
 
     url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags".replace("localhost", "127.0.0.1")
     try:
-        async with httpx.AsyncClient(timeout=0.25) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.get(url)
             _ollama_cache["is_alive"] = (resp.status_code == 200)
     except Exception:
@@ -36,7 +36,7 @@ async def check_ollama_status() -> Dict[str, Any]:
     """Checks whether the local Ollama server is reachable and if the configured model is downloaded."""
     url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags".replace("localhost", "127.0.0.1")
     try:
-        async with httpx.AsyncClient(timeout=0.5) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 _ollama_cache["is_alive"] = True
@@ -72,9 +72,9 @@ async def check_ollama_status() -> Dict[str, Any]:
 
 def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
-    Intelligent simulated reception agent used when Ollama is not yet downloaded or running.
-    Executes the exact same tool-calling contract as Ollama so all tools, citations,
-    and states work out-of-the-box.
+    Intelligent simulated reception agent for APCOER Pune used when Ollama or Gemini
+    are momentarily busy or offline. Executes the exact same tool-calling contract as Ollama
+    so all tools, citations, and states work with real institutional records.
     """
     last_msg = messages[-1]
     last_role = last_msg.get("role")
@@ -83,7 +83,7 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
         tool_content = last_msg.get("content", "").strip()
         # Clean any stray formatting symbols
         clean_facts = tool_content.replace("•", "").replace("*", "").strip()
-        dialogue = f"{clean_facts} Please let me know if you would like directions or have any other questions!"
+        dialogue = f"{clean_facts} Please let me know if you would like directions or have any further questions!"
         return {
             "role": "assistant",
             "content": dialogue,
@@ -101,18 +101,50 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
     prev_user_queries = [m.get("content", "") for m in messages if m.get("role") == "user"]
     context_str = " ".join(prev_user_queries).lower()
 
-    # Determine tool to invoke based on query intent
-    # 1. Department intent
+    # 1. College Identity & Name intent
+    if any(k in user_query for k in ["college name", "name of college", "our college", "which college", "what college", "what is this college", "apcoer", "who are you", "what is your name"]) or ("college" in user_query and "name" in user_query):
+        return {
+            "role": "assistant",
+            "content": (
+                "Hello and welcome! Our college is Anantrao Pawar College of Engineering & Research (APCOER), Pune. "
+                "Our parent trust is Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad, founded in 1907 with the guiding motto 'Bahujan Hitay, Bahujan Sukhaya') and we are affiliated with Savitribai Phule Pune University (DTE Code: 6794). "
+                "I am Buddy, your AI Receptionist. How may I assist you today?"
+            ),
+            "is_simulated": True
+        }
+
+    # 1b. Institutional History & ABMSP Trust intent
+    if any(k in user_query for k in ["history", "founded", "founder", "trust", "abmsp", "parishad", "bahujan", "motto"]):
+        return {
+            "role": "assistant",
+            "content": (
+                "Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad), our parent educational trust, was founded in 1907 by a team of renowned educationists and social reformers with the noble thought 'Bahujan Hitay, Bahujan Sukhaya'—for the welfare and happiness of the masses. "
+                "In the first half of the 20th century, A.B.M.S. Parishad made a commendable contribution of awakening and inspiring the masses who were deprived of education for generations, establishing educational institutions throughout Maharashtra and beyond. "
+                "The Parishad draws its enduring inspiration from Mahatma Jyotirao Phule, Rajarshi Chhatrapati Shahu Maharaj (the Ruler of Kolhapur), and Dr. Babasaheb Ambedkar, who fought for economic, social, and political justice and advocated the empowerment of disadvantaged sections of society. "
+                "Anantrao Pawar College of Engineering & Research (APCOER) was established in 2012 on a 10-acre campus near Parvati Hills to carry forward this mission."
+            ),
+            "is_simulated": True
+        }
+
+    # 2. Department intent
     dept_matches = {
-        "computer science": "Computer Science and Engineering",
-        "cse": "CSE",
+        "computer": "Computer Engineering",
+        "comp": "Computer Engineering",
+        "cse": "Computer Engineering",
+        "artificial intelligence": "Artificial Intelligence and Data Science",
+        "ai": "Artificial Intelligence and Data Science",
+        "data science": "Artificial Intelligence and Data Science",
+        "information technology": "Information Technology",
+        "it": "Information Technology",
         "mechanical": "Mechanical Engineering",
-        "mech": "MECH",
-        "electronics": "Electronics and Communication Engineering",
-        "ece": "ECE",
+        "mech": "Mechanical Engineering",
         "civil": "Civil Engineering",
-        "mba": "Management Studies (MBA)",
-        "management": "Management Studies (MBA)"
+        "electronics": "Electronics and Telecommunication Engineering",
+        "entc": "Electronics and Telecommunication Engineering",
+        "telecommunication": "Electronics and Telecommunication Engineering",
+        "mca": "Master of Computer Applications",
+        "first year": "First Year Engineering (Applied Science)",
+        "fe": "First Year Engineering (Applied Science)"
     }
     for k, v in dept_matches.items():
         if k in user_query or (("which floor" in user_query or "where" in user_query) and k in context_str):
@@ -128,12 +160,40 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
                 "is_simulated": True
             }
 
-    # 2. Faculty intent
-    if "faculty" in user_query or "professor" in user_query or "hod" in user_query or "doctor" in user_query or "dr." in user_query:
-        name_search = "Arvind"
-        for candidate in ["arvind", "sharma", "sneha", "patil", "rajeshwari", "nair", "vikram", "deshmukh", "sunita", "kapoor"]:
-            if candidate in user_query:
-                name_search = candidate
+    # 3. Faculty / Principal / Leadership intent
+    if any(k in user_query for k in ["faculty", "professor", "hod", "principal", "director", "vice principal", "tpo", "cabin", "consult"]):
+        name_search = "Dr. Sunil B. Thakare"
+        candidates = {
+            "principal": "Dr. Sunil B. Thakare",
+            "thakare": "Dr. Sunil B. Thakare",
+            "sunil": "Dr. Sunil B. Thakare",
+            "vice principal": "Prof. Shrikant B. Jagtap",
+            "jagtap": "Prof. Shrikant B. Jagtap",
+            "shrikant": "Prof. Shrikant B. Jagtap",
+            "gaikwad": "Dr. Rama B. Gaikwad",
+            "rama": "Dr. Rama B. Gaikwad",
+            "kadam": "Dr. Amit Ashokrao Kadam",
+            "amit": "Dr. Amit Ashokrao Kadam",
+            "musale": "Dr. Jitendra Musale",
+            "jitendra": "Dr. Jitendra Musale",
+            "deshmukh": "Dr. Amar Deshmukh",
+            "amar": "Dr. Amar Deshmukh",
+            "sorate": "Dr. Raviraj Ramesh Sorate",
+            "raviraj": "Dr. Raviraj Ramesh Sorate",
+            "kamble": "Dr. Dattatray P. Kamble",
+            "dattatray": "Dr. Dattatray P. Kamble",
+            "newase": "Dr. Atul D. Newase",
+            "atul": "Dr. Atul D. Newase",
+            "selukar": "Dr. Balaji S. Selukar",
+            "balaji": "Dr. Balaji S. Selukar",
+            "totla": "Prof. Nilesh S. Totla",
+            "nilesh": "Prof. Nilesh S. Totla",
+            "tpo": "Prof. Nilesh S. Totla",
+            "placement": "Prof. Nilesh S. Totla"
+        }
+        for k, v in candidates.items():
+            if k in user_query:
+                name_search = v
                 break
         return {
             "role": "assistant",
@@ -147,17 +207,25 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 3. Room / Location intent
-    if "room" in user_query or "auditorium" in user_query or "lab" in user_query or "library" in user_query or "office" in user_query:
+    # 4. Room / Location intent
+    if any(k in user_query for k in ["room", "auditorium", "lab", "library", "office", "cabin", "where is", "tbi", "seminar"]):
         room_name = "Auditorium"
-        if "lab" in user_query or "robotics" in user_query:
-            room_name = "Lab-204"
-        elif "102" in user_query or "registrar" in user_query:
-            room_name = "102"
-        elif "library" in user_query:
-            room_name = "LIB-01"
-        elif "principal" in user_query or "101" in user_query:
-            room_name = "101"
+        if "principal" in user_query or "101" in user_query:
+            room_name = "Principal Office (Room 101)"
+        elif "student" in user_query or "admin" in user_query or "admission" in user_query or "102" in user_query:
+            room_name = "Student Administrative Section (Room 102)"
+        elif "vice" in user_query or "103" in user_query:
+            room_name = "Vice Principal Office (Room 103)"
+        elif "library" in user_query or "reading" in user_query:
+            room_name = "Central Library & Digital Reading Hall (LIB-01)"
+        elif "tpo" in user_query or "placement" in user_query:
+            room_name = "Training & Placement Cell (TPO-01)"
+        elif "tbi" in user_query or "incubator" in user_query or "startup" in user_query:
+            room_name = "Technology Business Incubator (TBI-01)"
+        elif "workshop" in user_query or "cnc" in user_query:
+            room_name = "Mechanical Workshop Complex (WS-01)"
+        elif "seminar" in user_query or "auditorium" in user_query:
+            room_name = "Central Auditorium (AUD-01)"
         return {
             "role": "assistant",
             "content": "",
@@ -170,8 +238,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 4. College Hours intent
-    if "hour" in user_query or "timing" in user_query or "open" in user_query or "close" in user_query or "when does" in user_query:
+    # 5. College Hours intent
+    if any(k in user_query for k in ["hour", "timing", "timings", "open", "close", "when does", "schedule"]):
         return {
             "role": "assistant",
             "content": "",
@@ -184,8 +252,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 5. Events intent
-    if "event" in user_query or "symposium" in user_query or "hackathon" in user_query or "placement" in user_query:
+    # 6. Events intent
+    if any(k in user_query for k in ["event", "symposium", "sparktech", "technothon", "ashwamedh", "hackathon"]):
         return {
             "role": "assistant",
             "content": "",
@@ -198,8 +266,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 6. Announcements intent
-    if "announcement" in user_query or "notice" in user_query or "exam" in user_query or "circular" in user_query:
+    # 7. Announcements intent
+    if any(k in user_query for k in ["announcement", "notice", "circular", "dte", "sppu", "exam"]):
         return {
             "role": "assistant",
             "content": "",
@@ -212,8 +280,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 7. Document search intent (prospectus, eligibility, admission rules, fees, scholarship)
-    if any(k in user_query for k in ["eligibility", "prospectus", "scholarship", "anti-ragging", "ragging", "quota", "handbook", "parking", "visitor"]):
+    # 8. Document search intent (prospectus, eligibility, admission rules, fees, scholarship, syllabus)
+    if any(k in user_query for k in ["eligibility", "prospectus", "scholarship", "anti-ragging", "ragging", "quota", "handbook", "parking", "visitor", "cap", "dte code", "syllabus", "curriculum", "cutoff"]):
         return {
             "role": "assistant",
             "content": "",
@@ -226,7 +294,7 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 8. General FAQs
+    # 9. General FAQs (fees, admission, hostel, bonafide, id card)
     if any(k in user_query for k in ["fee", "admission", "hostel", "bonafide", "medical", "doctor", "card"]):
         return {
             "role": "assistant",
@@ -241,14 +309,14 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
         }
 
     # Default friendly greeting / reception response
-    if any(k in user_query for k in ["hi", "hello", "hey", "who are you", "buddy"]):
+    if any(k in user_query for k in ["hi", "hello", "hey", "greetings", "good morning", "good afternoon"]):
         return {
             "role": "assistant",
-            "content": "Hello! I'm Buddy, your Smart College Reception AI assistant. How can I assist you today?",
+            "content": "Hello and welcome! I am Buddy, the AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune. How may I assist you today?",
             "is_simulated": True
         }
 
-    # Fallback to document search to look for answers
+    # Fallback to document search to look for answers in official APCOER documents
     return {
         "role": "assistant",
         "content": "",

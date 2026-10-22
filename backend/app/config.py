@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,8 +26,20 @@ class Settings(BaseSettings):
     # Fallback to smart simulated assistant if Ollama is not yet downloaded/running
     MOCK_AI_FALLBACK: bool = True
 
-    # Database
-    DATABASE_PATH: str = str(DATA_DIR / "buddy.db")
+    # Database - Always point to workspace data/buddy.db
+    DATABASE_PATH: str = str((DATA_DIR / "buddy.db").resolve())
+
+    @field_validator("DATABASE_PATH", mode="after")
+    @classmethod
+    def resolve_database_path(cls, v: str) -> str:
+        p = Path(v)
+        if not p.is_absolute():
+            # Resolve relative to root workspace dir
+            cand = (WORKSPACE_DIR / p).resolve()
+            if cand.exists():
+                return str(cand)
+            return str((DATA_DIR / "buddy.db").resolve())
+        return str(p.resolve())
 
     # Internet Web Search
     WEB_SEARCH_ENABLED: bool = False

@@ -61,3 +61,8 @@ BUDDY-Fish-TTS/logs/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Raw scraped web content and archives
+knowledge/raw/
+knowledge/archive/
+*.pdf

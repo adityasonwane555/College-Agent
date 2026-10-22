@@ -1,0 +1,48 @@
+=== PAGE 1 ===
+[Official Student & Visitor Campus Navigation Guide - APCOER Pune]
+ANANTRAO PAWAR COLLEGE OF ENGINEERING & RESEARCH (APCOER), PUNE
+Run by: Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad, Estd. 1907 with the thought "Bahujan Hitay, Bahujan Sukhaya")
+Affiliated to Savitribai Phule Pune University (SPPU) | Approved by AICTE | DTE Code: 6794
+Campus Address: S. No. 83/2/E, Laxminagar, Parvati, Pune - 411009, Maharashtra
+
+SECTION: Campus Layout & Academic Building Directory
+The APCOER campus is located at the foot of historic Parvati Hills in Pune and comprises modern academic, administrative, and research facilities:
+1. Ground Floor (Main Academic Building):
+   - Principal Directorate: Dr. Sunil B. Thakare (Room 101)
+   - Student Administrative Section, Verification & Admissions: Room 102
+   - Accounts Section & Fee Counters: Counter 1 to 4
+   - Vice Principal Office: Prof. Shrikant B. Jagtap (Room 103)
+   - First Year Engineering (FE / Applied Science): Dr. Balaji S. Selukar
+   - Central Library & Digital Reading Hall (Ground & 1st Floor)
+   - Mechanical Engineering Department (HOD: Dr. Dattatray P. Kamble) & Workshop Complex
+   - Civil Engineering Department Labs (Surveying, Strength of Materials, Geotechnical)
+2. First Floor:
+   - Training & Placement Cell (TPO): Prof. Nilesh S. Totla (Room TPO-01)
+   - Central Auditorium & Audio-Visual Hall (Capacity 500+ seats)
+   - Faculty Conference Rooms
+3. Second Floor:
+   - Computer Engineering Department (HOD: Dr. Rama B. Gaikwad)
+   - Artificial Intelligence & Data Science (AI & DS) Department (HOD: Dr. Jitendra Musale)
+   - Civil Engineering Department (HOD: Dr. Raviraj Ramesh Sorate, Room 224)
+   - High-Performance Computing & GPU Labs
+4. Third Floor:
+   - Information Technology (IT) Department (HOD: Dr. Amit Ashokrao Kadam, Room 304)
+   - Electronics & Telecommunication (E&TC) Department (HOD: Dr. Amar Deshmukh, Room 323)
+   - Language Laboratory & Internet Resource Center
+5. Fourth Floor:
+   - Master of Computer Applications (MCA) Department (HOD: Dr. Atul D. Newase)
+   - Project Development Center & Smart Classrooms
+6. Innovation & Research Centers:
+   - APCOER Technology Business Incubator (TBI / Startup Cell)
+   - Center of Excellence in IoT, AI, and Robotics
+
+=== PAGE 2 ===
+SECTION: Visitors, Campus Gate & Operating Hours
+Visitors Protocol:
+- Main Gate Entrance is located on Laxminagar Road, Parvati, Pune 411009.
+- Visitor vehicles should be parked at Designated Parking Lot near Gate 1.
+- Guest Wi-Fi vouchers and campus navigation assistance are provided at the Front Reception Desk by Buddy AI.
+- Campus emergency medical line and First Aid Room are located on the Ground Floor adjacent to Student Section 102.
+- Campus Gate Hours: 7:00 AM to 9:00 PM daily.
+- Academic & Administrative Office Hours: 8:30 AM to 5:00 PM (Monday to Saturday, 1st & 3rd Saturdays off).
+- Central Library: 8:00 AM to 8:00 PM (Monday to Saturday).

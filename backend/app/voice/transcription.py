@@ -121,9 +121,13 @@ def transcribe_audio_file(file_path: Path) -> Dict[str, Any]:
         segments, info = model.transcribe(
             str(file_path),
             language=settings.STT_LANGUAGE if settings.STT_LANGUAGE != "auto" else None,
-            beam_size=5
+            beam_size=5,
+            temperature=0.0,
+            vad_filter=True,
+            vad_parameters=dict(min_silence_duration_ms=400)
         )
         transcribed_text = " ".join([seg.text.strip() for seg in segments]).strip()
+        print(f"[Whisper STT] Recognized text: \"{transcribed_text}\" (lang={info.language}, dur={info.duration:.1f}s)")
 
         return {
             "success": True,
@@ -143,9 +147,13 @@ def transcribe_audio_file(file_path: Path) -> Dict[str, Any]:
                 segments, info = cpu_model.transcribe(
                     str(file_path),
                     language=settings.STT_LANGUAGE if settings.STT_LANGUAGE != "auto" else None,
-                    beam_size=3
+                    beam_size=3,
+                    temperature=0.0,
+                    vad_filter=True,
+                    vad_parameters=dict(min_silence_duration_ms=400)
                 )
                 transcribed_text = " ".join([seg.text.strip() for seg in segments]).strip()
+                print(f"[Whisper CPU Fallback] Recognized text: \"{transcribed_text}\"")
                 return {
                     "success": True,
                     "text": transcribed_text,

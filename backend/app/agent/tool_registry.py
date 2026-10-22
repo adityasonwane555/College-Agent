@@ -81,7 +81,7 @@ OLLAMA_TOOLS_SCHEMA: List[Dict[str, Any]] = [
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Faculty member's name or department to search (e.g., 'Arvind Sharma', 'Sneha Patil', 'Rajeshwari')."
+                        "description": "Faculty member's name or department to search (e.g., 'Dr. Sunil B. Thakare', 'Dr. Rama B. Gaikwad', 'Dr. Amit Ashokrao Kadam', 'Prof. Nilesh S. Totla')."
                     }
                 },
                 "required": ["name"]

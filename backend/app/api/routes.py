@@ -20,6 +20,7 @@ from ..voice.synthesis import synthesize_speech, is_fish_tts_server_alive
 from ..voice.audio_utils import AUDIO_DIR
 from ..security.authentication import authenticate_admin, verify_admin_token
 from ..hardware.rgb_controller import rgb_controller
+from ..hardware.esp32_client import esp32_client
 
 router = APIRouter(prefix="/api")
 
@@ -48,6 +49,11 @@ class LedStateRequest(BaseModel):
     bass: Optional[float] = None
     mid: Optional[float] = None
     treble: Optional[float] = None
+
+
+class DisplayMessageRequest(BaseModel):
+    title: str
+    body: str
 
 
 class AdminLoginRequest(BaseModel):
@@ -292,3 +298,23 @@ def get_hardware_led_status():
 def ping_hardware_led():
     """Actively pings the ESP32-S3 microcontroller to verify network connectivity."""
     return rgb_controller.test_connection()
+
+
+@router.post("/hardware/display")
+def update_hardware_display(req: DisplayMessageRequest):
+    """Sends a title and message to the ST7789 TFT display on the ESP32."""
+    success = esp32_client.update_display(req.title, req.body)
+    return {"ok": success}
+
+
+@router.post("/hardware/chime")
+def trigger_hardware_chime():
+    """Triggers the MAX98357A speaker chime tone test."""
+    success = esp32_client.trigger_chime()
+    return {"ok": success}
+
+
+@router.get("/hardware/esp32-health")
+def get_esp32_health():
+    """Queries the ESP32-S3 microcontroller directly over local Wi-Fi."""
+    return esp32_client.check_health()

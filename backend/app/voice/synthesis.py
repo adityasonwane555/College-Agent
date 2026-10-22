@@ -106,9 +106,26 @@ def extract_spoken_text(text: str, max_chars: int = 1500) -> str:
     # Strip markdown links and raw URLs
     clean = re.sub(r'\[.*?\]\(.*?\)', '', clean)
     clean = re.sub(r'https?://\S+', '', clean)
-    # Clean bullet points into smooth conversational transitions
-    clean = re.sub(r'^\s*[-*•]\s*', '', clean, flags=re.MULTILINE)
-    clean = re.sub(r'[*#_`>~|]', '', clean)
+    # Strip markdown symbols, brackets, and parentheses that disrupt speech rhythm
+    clean = re.sub(r'[*#_`>~|()[\]{}]', ' ', clean)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+
+    # Letter-by-letter pronunciation normalization for TTS speech synthesis
+    # Ensures "APCOER" is spoken letter-by-letter as "A, P, C, O, E, R" instead of a mumbled/blended pseudo-word
+    clean = re.sub(r"\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R['’]s\b", "A, P, C, O, E, R's", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R\b", "A, P, C, O, E, R,", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P['’]s\b", "A, B, M, S, P's", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P\b", "A, B, M, S, P,", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bS[-.,\s]?P[-.,\s]?P[-.,\s]?U\b", "S, P, P, U,", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bD[-.,\s]?T[-.,\s]?E\b", "D, T, E,", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?I[-.,\s]?C[-.,\s]?T[-.,\s]?E\b", "A, I, C, T, E,", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bH[-.,\s]?O[-.,\s]?D\b", "H, O, D,", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bT[-.,\s]?P[-.,\s]?O\b", "T, P, O,", clean, flags=re.IGNORECASE)
+
+    # Sanitize any accidental duplicate commas, whitespace before commas, or commas before punctuation
+    clean = re.sub(r',\s*,+', ',', clean)
+    clean = re.sub(r'\s+,', ',', clean)
+    clean = re.sub(r',\s*([.!?:;])', r'\1', clean)
     clean = re.sub(r'\s+', ' ', clean).strip()
 
     if not clean:

@@ -1,0 +1,50 @@
+=== PAGE 1 ===
+[Official Prospectus & Admission Guide 2026-2027 - APCOER Pune]
+ANANTRAO PAWAR COLLEGE OF ENGINEERING & RESEARCH (APCOER), PUNE
+Run by: Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad, Estd. 1907 with the thought "Bahujan Hitay, Bahujan Sukhaya")
+Affiliated to Savitribai Phule Pune University (SPPU) | Approved by AICTE New Delhi | Recognized by DTE Maharashtra (Code: 6794) | NAAC Accredited
+
+SECTION: Institutional Overview & Heritage
+Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad), an educational trust, was founded by a team of renowned educationists and social reformers in 1907 with the guiding motto "Bahujan Hitay, Bahujan Sukhaya". In the first half of the 20th century, A.B.M.S. Parishad made a commendable contribution of awakening and inspiring the masses who were deprived of education for generations, establishing numerous educational institutions across Maharashtra and beyond. The Parishad draws its enduring inspiration from Mahatma Jyotirao Phule, Rajarshi Chhatrapati Shahu Maharaj (the Ruler of Kolhapur), and Dr. Babasaheb Ambedkar, who fought for economic, social, and political justice and advocated the empowerment of disadvantaged sections of society. Anantrao Pawar College of Engineering & Research (APCOER), Pune was established in 2012 by A.B.M.S. Parishad. The college is headed by Principal Dr. Sunil B. Thakare and Vice Principal Prof. Shrikant B. Jagtap.
+
+SECTION: Academic Undergraduate & Postgraduate Programs Offered
+Undergraduate B.Tech / B.E. Programs (4 Years):
+1. Computer Engineering (Intake: 120 seats) - HOD: Dr. Rama B. Gaikwad
+2. Artificial Intelligence and Data Science (AI & DS) (Intake: 60 seats) - HOD: Dr. Jitendra Musale
+3. Information Technology (IT) (Intake: 60 seats) - HOD: Dr. Amit Ashokrao Kadam
+4. Electronics and Telecommunication Engineering (E&TC) (Intake: 60 seats) - HOD: Dr. Amar Deshmukh
+5. Civil Engineering (Intake: 60 seats) - HOD: Dr. Raviraj Ramesh Sorate
+6. Mechanical Engineering (Intake: 60 seats) - HOD: Dr. Dattatray P. Kamble
+
+Postgraduate & Professional Programs:
+1. Master of Computer Applications (MCA) (2 Years) - HOD: Dr. Atul D. Newase
+2. First Year Engineering (FE / Applied Science) - HOD: Dr. Balaji S. Selukar
+3. M.E. in Civil Engineering (Construction & Management)
+4. M.E. in Mechanical Engineering (Design Engineering)
+
+=== PAGE 2 ===
+SECTION: Admission Eligibility & CAP Round Procedures
+Admissions to all engineering and MCA courses are conducted through the Centralized Admission Process (CAP) rounds governed by the State Common Entrance Test Cell / Directorate of Technical Education (DTE), Government of Maharashtra.
+- Maharashtra DTE Institute Code: 6794
+- First Year B.Tech Eligibility: Passed 10+2 / HSC examination with Physics and Mathematics as compulsory subjects along with Chemistry/Biotechnology/Computer Science/Technical Vocational subject, securing at least 45% marks (40% for backward class / reserved categories of Maharashtra). Valid score in MHT-CET 2026 or JEE Main 2026.
+- Direct Second Year Engineering (DSE) Eligibility: Passed Diploma in Engineering & Technology with at least 45% marks (40% for reserved categories), or B.Sc. degree from a recognized university with Mathematics in 12th standard.
+- Admission Counseling & Verification Desk: Room 102 (Ground Floor, Main Academic Building). Email: admissions@abmspcoerpune.org.
+
+=== PAGE 3 ===
+SECTION: Fee Structure, Scholarships & Government Concessions
+- Tuition and development fees are finalized according to the Shikshan Shulk Samiti / Fee Regulating Authority (FRA), Maharashtra State.
+- Government Scholarship Schemes (Processed via MahaDBT Portal):
+  1. EBC (Economically Backward Class): 50% tuition fee concession for eligible open category students with annual family income up to Rs. 8 Lakh.
+  2. TFWS (Tuition Fee Waiver Scheme): 100% tuition fee waiver for top 5% merit intake students.
+  3. SC / ST / VJNT / SBC / OBC Scholarships: As per Maharashtra Social Justice and Special Assistance Department rules.
+  4. Dr. Panjabrao Deshmukh Hostel Maintenance Allowance for eligible rural students.
+- Assistance and form verification are provided at the College Scholarship Helpdesk in the Accounts Section.
+
+=== PAGE 4 ===
+SECTION: Training & Placements and Campus Life
+- Training and Placement Cell (T&P): Led by Prof. Nilesh S. Totla (Room TPO-01). Provides extensive pre-placement training, aptitude grooming, coding bootcamps, and mock interviews.
+- Major Placement Recruiters: TCS, Infosys, Capgemini, L&T Infotech, Tech Mahindra, Cognizant, Persistent Systems, Bitwise, Hexaware, QSpiders, and Bosch.
+- Annual Technical Symposium: SPARKTECH - National level competition with paper presentations, robotics, and coding contests.
+- Hackathon: Technothon Innovation Challenge.
+- Cultural & Sports: Ashwamedh Annual Cultural Gathering and Inter-collegiate Sports Competitions.
+- Anti-Ragging Policy: Zero-tolerance policy strictly conforming to AICTE and UGC anti-ragging regulations. Anti-Ragging Committee is chaired by Principal Dr. Sunil B. Thakare. Emergency Helpline: 1800-180-5522.
