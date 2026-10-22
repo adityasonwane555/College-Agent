@@ -18,8 +18,8 @@
 
 // --- Wi-Fi Credentials (Change to match your local network) ---
 // NOTE: For security, never commit real credentials to public repositories.
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID     = "Aditya";
+const char* WIFI_PASSWORD = "Kamaataj";
 
 // Optional: Define a simple shared token if your network requires basic protection.
 // Leave empty ("") to disable token verification for simple local use.
@@ -55,7 +55,10 @@ enum LedState {
 volatile LedState currentState = STATE_BOOTING;
 unsigned long lastStateUpdate = 0;
 unsigned long stateEnteredTime = 0;
-float currentAmplitude = 0.0f; // 0.0 to 1.0 audio volume indicator
+float currentAmplitude = 0.0f; // 0.0 to 1.0 overall volume
+float currentBass      = 0.0f; // 0.0 to 1.0 low notes (bass/vowels)
+float currentMid       = 0.0f; // 0.0 to 1.0 mid notes (formants/speech body)
+float currentTreble    = 0.0f; // 0.0 to 1.0 high notes (sibilants/consonants)
 
 // ========================== SERVER INSTANCE ==========================
 WebServer server(HTTP_PORT);
@@ -113,20 +116,29 @@ String extractJsonValue(const String& json, const String& key) {
   }
 
   int valEnd = valStart;
-  while (valEnd < json.length() && json[valEnd] != '\"' && json[valEnd] != ',' && json[valEnd] != '}' && json[valEnd] != '\n' && json[valEnd] != '\r') {
+  while (valEnd < json.length() && json[valEnd] != '\"' && json[valEnd] != ',' && json[valEnd] != '}' && json[valEnd] != '\r' && json[valEnd] != '\n') {
     valEnd++;
   }
 
   return json.substring(valStart, valEnd);
 }
 
-void transitionTo(LedState newState, float amplitude = 0.0f) {
+void transitionTo(LedState newState, float amplitude = -1.0f, float bass = -1.0f, float mid = -1.0f, float treble = -1.0f) {
   if (currentState != newState) {
-    Serial.printf("[LED] State transition: %s -> %s\n", stateToString(currentState), stateToString(newState));
+    LOG_PRINTF("[LED] State transition: %s -> %s\n", stateToString(currentState), stateToString(newState));
     currentState = newState;
     stateEnteredTime = millis();
+    // Reset frequencies on state change
+    if (newState != STATE_SPEAKING) {
+      currentBass = 0.0f;
+      currentMid = 0.0f;
+      currentTreble = 0.0f;
+    }
   }
-  currentAmplitude = amplitude;
+  if (amplitude >= 0.0f) currentAmplitude = amplitude;
+  if (bass >= 0.0f) currentBass = bass;
+  if (mid >= 0.0f) currentMid = mid;
+  if (treble >= 0.0f) currentTreble = treble;
   lastStateUpdate = millis();
 }
 
@@ -191,16 +203,24 @@ void handleSetState() {
     return;
   }
 
-  // Optional amplitude value for audio reactivity
-  float amp = 0.0f;
+  // Optional equalizer and volume reactivity parameters
+  float amp = -1.0f;
   String ampStr = extractJsonValue(body, "amplitude");
-  if (ampStr.length() > 0) {
-    amp = ampStr.toFloat();
-    if (amp < 0.0f) amp = 0.0f;
-    if (amp > 1.0f) amp = 1.0f;
-  }
+  if (ampStr.length() > 0) amp = constrain(ampStr.toFloat(), 0.0f, 1.0f);
 
-  transitionTo(targetState, amp);
+  float bass = -1.0f;
+  String bassStr = extractJsonValue(body, "bass");
+  if (bassStr.length() > 0) bass = constrain(bassStr.toFloat(), 0.0f, 1.0f);
+
+  float mid = -1.0f;
+  String midStr = extractJsonValue(body, "mid");
+  if (midStr.length() > 0) mid = constrain(midStr.toFloat(), 0.0f, 1.0f);
+
+  float treble = -1.0f;
+  String trebleStr = extractJsonValue(body, "treble");
+  if (trebleStr.length() > 0) treble = constrain(trebleStr.toFloat(), 0.0f, 1.0f);
+
+  transitionTo(targetState, amp, bass, mid, treble);
 
   String response = "{\"ok\":true,\"state\":\"" + String(stateToString(targetState)) + "\"}";
   server.send(200, "application/json", response);
@@ -273,26 +293,52 @@ void renderLedAnimation() {
     }
 
     // -------------------------------------------------------------
-    // SPEAKING: Purple / Magenta animated breathing with subtle color
-    // shifts and optional amplitude reactivity
+    // SPEAKING: Speaker Equalizer Audio-Reactive Engine
+    // Blinks and pulses to high and low notes like a speaker / VU meter
+    // - Low notes (Bass): Deep Magenta / Crimson Subwoofer Pulse
+    // - Mid notes (Syllables): Royal Violet / Purple Body
+    // - High notes (Treble): Crisp Electric Cyan / White Sparkles
     // -------------------------------------------------------------
     case STATE_SPEAKING: {
-      // Base breathing cycle (period: 1600ms)
-      float phase = (float)(now % 1600) / 1600.0f;
-      float wave = 0.35f + 0.65f * (0.5f - 0.5f * cos(phase * 2.0f * PI));
+      // 1. Syllable Cadence: Human speech pacing (~3.8 Hz, 260ms per syllable)
+      float syllPhase = (float)(now % 260) / 260.0f;
+      float syllWave = 0.5f - 0.5f * cos(syllPhase * 2.0f * PI);
+      float syllSnap = powf(syllWave, 2.0f); // Sharp physical speaker cone snap
 
-      // If audio amplitude is provided, modulate brightness with voice dynamics
-      if (currentAmplitude > 0.05f) {
-        wave = wave * 0.4f + currentAmplitude * 0.6f;
-        if (wave > 1.0f) wave = 1.0f;
+      // 2. Bass (Low Notes): Deep vowel resonance & chest tone (1.8 Hz phrase breathing)
+      float bassPhase = (float)(now % 540) / 540.0f;
+      float bassWave = 0.5f - 0.5f * cos(bassPhase * 2.0f * PI);
+
+      // 3. Treble (High Notes): Sibilants & crisp consonants (8-14 Hz rapid staccato blinks)
+      float trebPhase = (float)(now % 95) / 95.0f;
+      float trebBlink = (trebPhase > 0.60f) ? (0.5f - 0.5f * cos((trebPhase - 0.60f) / 0.40f * 2.0f * PI)) : 0.0f;
+
+      // Blend external audio data if provided, or use organic speech harmonics
+      float activeBass = (currentBass > 0.01f) ? currentBass : bassWave;
+      float activeMid  = (currentMid > 0.01f)  ? currentMid  : syllSnap;
+      float activeTreb = (currentTreble > 0.01f) ? currentTreble : trebBlink;
+      float activeAmp  = (currentAmplitude > 0.01f) ? currentAmplitude : (0.40f + 0.60f * syllSnap);
+
+      // --- Color Equalizer Synthesis ---
+      // Bass (Low notes) -> Punchy Deep Magenta / Crimson Subwoofer Pulse
+      float r = 245.0f * activeBass + 170.0f * activeMid + 70.0f * activeTreb;
+      // Mid (Vocal core) -> Rich Royal Violet / Purple Body
+      float g = 10.0f * activeBass + 25.0f * activeMid + 225.0f * activeTreb;
+      // Treble (High notes) -> Electric Cyan / Crisp White Flash
+      float b = 70.0f * activeBass + 255.0f * activeMid + 255.0f * activeTreb;
+
+      // Master volume envelope (expands and contracts like a pulsing speaker diaphragm)
+      float masterEnvelope = activeAmp * (0.35f + 0.65f * syllSnap);
+      if (activeTreb > 0.45f) {
+        // High note treble flash accent
+        masterEnvelope = fminf(1.0f, masterEnvelope + 0.35f * activeTreb);
       }
 
-      // Subtle color transition between rich purple and vibrant magenta
-      float colorShift = 0.5f + 0.5f * sin(phase * PI);
-      uint8_t r = (uint8_t)(wave * (190.0f + 65.0f * colorShift)); // 190 to 255
-      uint8_t g = (uint8_t)(wave * (10.0f * (1.0f - colorShift))); // Very subtle green
-      uint8_t b = (uint8_t)(wave * (240.0f - 80.0f * colorShift)); // 240 down to 160
-      setLedColor(r, g, b);
+      uint8_t finalR = (uint8_t)constrain(r * masterEnvelope, 0.0f, 255.0f);
+      uint8_t finalG = (uint8_t)constrain(g * masterEnvelope, 0.0f, 255.0f);
+      uint8_t finalB = (uint8_t)constrain(b * masterEnvelope, 0.0f, 255.0f);
+
+      setLedColor(finalR, finalG, finalB);
       break;
     }
 
