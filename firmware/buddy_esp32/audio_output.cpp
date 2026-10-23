@@ -1,6 +1,10 @@
 /*
  * =====================================================================================
  * BUDDY AI — MAX98357A Audio Output Implementation
+ * Hardware Peripheral: ESP32-S3 I2S1 Controller (Dedicated TX)
+ * Pins: BCLK=GPIO 15, LRC=GPIO 16, DIN=GPIO 17
+ * Note: I2S1 is strictly used for DAC playback to prevent resource contention
+ *       with the INMP441 microphone operating concurrently on I2S0 RX.
  * =====================================================================================
  */
 
@@ -14,6 +18,14 @@ AudioOutput::AudioOutput()
     _volume(SPK_DEFAULT_VOLUME),
     _sampleRate(SPK_SAMPLE_RATE) {}
 
+/**
+ * Initializes the MAX98357A I2S audio driver.
+ * Configures the I2S1 peripheral in Master TX mode.
+ * Supports dynamic sample rate switching (e.g. 16 kHz for TTS speech, 44.1 kHz for high-fidelity audio).
+ *
+ * @param sampleRate Audio sampling rate in Hertz (typically 16000 or 44100).
+ * @return True if I2S driver installed and GPIO pins successfully mapped.
+ */
 bool AudioOutput::begin(uint32_t sampleRate) {
   if (_isInitialized && _sampleRate == sampleRate) {
     return true;
@@ -24,6 +36,11 @@ bool AudioOutput::begin(uint32_t sampleRate) {
 
   _sampleRate = sampleRate;
 
+  // I2S Configuration for MAX98357A:
+  // - 16-bit signed PCM samples.
+  // - Stereo slot format (MAX98357A decodes Left/Right depending on SD_MODE resistor,
+  //   requiring standard stereo clock framing).
+  // - 6 DMA buffers of 512 samples each (~64 ms buffer) to eliminate underrun clicks.
   i2s_config_t i2s_config = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
     .sample_rate = _sampleRate,
