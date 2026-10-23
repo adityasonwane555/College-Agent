@@ -67,21 +67,24 @@ void RgbManager::update() {
   }
 }
 
-// IDLE: Soft cyan breathing (calm, ready for user)
+// IDLE: Soft cyan breathing (calm, ready for user interaction)
+// Uses a 3.0-second sinusoidal brightness wave (15-80 intensity) to create a relaxed standby presence.
 void RgbManager::renderIdle(unsigned long elapsed) {
   float wave = (sin((elapsed / 3000.0f) * 2.0f * PI) + 1.0f) * 0.5f; // 3 sec cycle
   uint8_t brightness = (uint8_t)(15 + wave * 65);
   applyColor(0, brightness, (uint8_t)(brightness * 1.2f));
 }
 
-// LISTENING: Blue pulsing (active attention to user voice)
+// LISTENING: Electric blue pulsing (signals active attention to user voice)
+// Faster 1.2-second sine wave alerting user that the INMP441 microphone DMA is recording.
 void RgbManager::renderListening(unsigned long elapsed) {
   float wave = (sin((elapsed / 1200.0f) * 2.0f * PI) + 1.0f) * 0.5f; // 1.2 sec cycle
   uint8_t val = (uint8_t)(40 + wave * 180);
   applyColor(0, (uint8_t)(val * 0.35f), val);
 }
 
-// THINKING: Warm amber pulse (processing query)
+// THINKING: Warm amber pulse (signals LLM / search reasoning in progress)
+// Brisk 800ms sine modulation indicating active backend orchestrator computation.
 void RgbManager::renderThinking(unsigned long elapsed) {
   float wave = (sin((elapsed / 800.0f) * 2.0f * PI) + 1.0f) * 0.5f; // 800ms brisk pulse
   uint8_t val = (uint8_t)(40 + wave * 180);
@@ -89,6 +92,10 @@ void RgbManager::renderThinking(unsigned long elapsed) {
 }
 
 // SPEAKING: Smooth reactive purple reacting to speech volume / frequencies
+// Dynamic multi-band equalizer:
+// - Red channel maps to low-frequency speech chest resonance (Bass: 80-250 Hz).
+// - Green channel maps to vocal clarity / formants (Mid: 500-2000 Hz).
+// - Blue channel maps to sibilance and breath consonants (Treble: 3000-8000 Hz).
 void RgbManager::renderSpeaking(unsigned long elapsed) {
   if (_amplitude > 0.05f) {
     // Reactive modulation based on volume and frequency bands
@@ -97,21 +104,21 @@ void RgbManager::renderSpeaking(unsigned long elapsed) {
     uint8_t b = (uint8_t)constrain(100 + _treble * 130.0f + _amplitude * 25.0f, 0.0f, 255.0f);
     applyColor(r, g, b);
   } else {
-    // Gentle purple breathing between sentences
+    // Gentle purple breathing between sentences to maintain visual warmth
     float wave = (sin((elapsed / 1500.0f) * 2.0f * PI) + 1.0f) * 0.5f;
     uint8_t val = (uint8_t)(30 + wave * 100);
     applyColor(val, 0, (uint8_t)(val * 1.4f));
   }
 }
 
-// ERROR: Gentle red pulse
+// ERROR: Pulsing crimson red (1000ms period) indicating network or hardware fault
 void RgbManager::renderError(unsigned long elapsed) {
   float wave = (sin((elapsed / 1000.0f) * 2.0f * PI) + 1.0f) * 0.5f;
   uint8_t val = (uint8_t)(50 + wave * 160);
   applyColor(val, 0, 0);
 }
 
-// BOOTING: Soft amber/orange
+// BOOTING: Soft amber/orange warm glow during power-on self test
 void RgbManager::renderBooting(unsigned long elapsed) {
   float wave = (sin((elapsed / 1500.0f) * 2.0f * PI) + 1.0f) * 0.5f;
   uint8_t val = (uint8_t)(40 + wave * 80);
