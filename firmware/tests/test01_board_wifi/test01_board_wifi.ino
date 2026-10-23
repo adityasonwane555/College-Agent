@@ -19,12 +19,17 @@ void setup() {
   Serial.println("  BUDDY AI — TEST 1: ESP32-S3 Board & Wi-Fi Diagnostic  ");
   Serial.println("========================================================");
 
-  // 1. Chip Architecture & Memory
+  // 1. Chip Architecture & Memory Health:
+  // - Dual-core Xtensa LX7 @ 240 MHz.
+  // - 16 MB Quad-SPI NOR Flash.
+  // - Minimum free SRAM must exceed 100 KB before allocating network buffers.
   Serial.printf("[Chip] ESP32-S3 Cores: %d, Rev: v%d\n", ESP.getChipCores(), ESP.getChipRevision());
   Serial.printf("[Flash] Size: %u MB, Speed: %u MHz\n", ESP.getFlashChipSize() / (1024 * 1024), ESP.getFlashChipSpeed() / 1000000);
   Serial.printf("[SRAM] Total Heap: %u bytes | Free: %u bytes\n", ESP.getHeapSize(), ESP.getFreeHeap());
 
-  // 2. PSRAM Verification (Crucial for N16R8 Octal PSRAM)
+  // 2. PSRAM Verification (Crucial for N16R8 Octal PSRAM):
+  // - 8 MB High-Speed Octal SPI PSRAM is required for holding uncompressed 16-bit PCM
+  //   circular recording buffers for HTTP streaming without starving FreeRTOS tasks.
   if (psramInit()) {
     Serial.printf("[PSRAM] Total: %u MB | Free: %u bytes (SUCCESS)\n", ESP.getPsramSize() / (1024 * 1024), ESP.getFreePsram());
   } else {
