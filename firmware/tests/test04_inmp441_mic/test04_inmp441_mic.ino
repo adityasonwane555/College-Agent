@@ -33,6 +33,10 @@ void setup() {
   Serial.println("  BUDDY AI — TEST 4: INMP441 Digital Microphone Check   ");
   Serial.println("========================================================");
 
+  // INMP441 I2S DMA Configuration:
+  // - 16000 Hz sample rate (native requirement for OpenAI Whisper STT models).
+  // - 32-bit slot width: INMP441 outputs 24-bit data MSB-aligned inside a 32-bit slot.
+  // - ONLY_LEFT channel: L/R pin tied to GND selects Left slot.
   i2s_config_t i2s_config = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
     .sample_rate = SAMPLE_RATE,
@@ -73,6 +77,7 @@ void setup() {
 
 void loop() {
   size_t bytesRead = 0;
+  // Non-blocking DMA burst read of 256 samples with 100ms timeout
   esp_err_t res = i2s_read(I2S_PORT, (void*)rawSamples, sizeof(rawSamples), &bytesRead, pdMS_TO_TICKS(100));
 
   if (res == ESP_OK && bytesRead > 0) {
@@ -80,6 +85,8 @@ void loop() {
     int64_t sumSquares = 0;
 
     for (size_t i = 0; i < samples; i++) {
+      // INMP441 puts 24-bit data in the upper bits of the 32-bit word.
+      // Arithmetic shift right by 14 bits converts to signed 16-bit PCM while optimizing vocal dynamic range.
       int16_t val16 = (int16_t)(rawSamples[i] >> 14);
       sumSquares += (int64_t)val16 * val16;
     }
