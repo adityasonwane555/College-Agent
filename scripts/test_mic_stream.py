@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
 BUDDY AI — Test Microphone Stream & PC Transcription (Test 8 Tool)
-Fetches audio captured from INMP441 on ESP32-S3 and runs Whisper transcription.
+
+Verifies the complete hardware-to-AI voice pipeline:
+1. Pings the ESP32-S3 HTTP REST server (/api/health) to confirm network connectivity and Wi-Fi RSSI.
+2. Triggers an on-demand audio capture from the INMP441 I2S microphone (/api/record?seconds=N).
+3. Receives standard 16 kHz 16-bit mono RIFF WAV audio over HTTP binary transport.
+4. Persists the audio file to data/audio/test_esp32_mic.wav.
+5. Feeds the raw PCM stream directly into the local GPU-accelerated faster-whisper STT engine.
 """
 
 import sys
@@ -17,9 +23,21 @@ from app.voice.transcription import transcribe_audio_file
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test ESP32 INMP441 Mic Audio Stream")
-    parser.add_argument("--url", type=str, default="http://192.168.1.5", help="ESP32 IP or URL")
-    parser.add_argument("--seconds", type=int, default=3, help="Recording duration (seconds)")
+    parser = argparse.ArgumentParser(
+        description="Test ESP32-S3 INMP441 Microphone Audio Stream and PC Whisper Transcription"
+    )
+    parser.add_argument(
+        "--url",
+        type=str,
+        default="http://192.168.1.5",
+        help="Base URL or IP address of the ESP32-S3 hardware (e.g., http://192.168.1.5)"
+    )
+    parser.add_argument(
+        "--seconds",
+        type=int,
+        default=3,
+        help="Recording duration in seconds (default: 3 seconds)"
+    )
     args = parser.parse_args()
 
     esp32_client.base_url = args.url.rstrip("/")
