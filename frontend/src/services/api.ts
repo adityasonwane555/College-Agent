@@ -49,7 +49,9 @@ export const api = {
 
   async transcribeAudio(audioBlob: Blob): Promise<{ success: boolean; text: string; error?: string }> {
     const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.wav');
+    const type = audioBlob.type || '';
+    const filename = type.includes('webm') ? 'recording.webm' : (type.includes('ogg') ? 'recording.ogg' : 'recording.wav');
+    formData.append('audio', audioBlob, filename);
 
     const res = await fetch(`${API_BASE}/voice/transcribe`, {
       method: 'POST',

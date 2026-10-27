@@ -74,7 +74,14 @@ export const App: React.FC = () => {
     stopSpeaking,
     toggleMute,
     speak,
-    playInstantAcknowledgment
+    playInstantAcknowledgment,
+    audioInputDevices,
+    selectedInputDeviceId,
+    changeAudioInputDevice,
+    activeMicLabel,
+    refreshAudioDevices,
+    audioOutputTarget,
+    setAudioOutputTarget
   } = useVoice({
     onTranscriptionComplete: (text) => {
       handleSendMessage(text);
@@ -106,6 +113,7 @@ export const App: React.FC = () => {
 
     setMessages((prev) => [...prev, userMsg]);
     setRobotState('thinking');
+    api.setLedState('THINKING');
     setStatusText("Consulting college records & documents...");
 
     // Immediate conversational filler (<200ms reaction time)
@@ -133,16 +141,19 @@ export const App: React.FC = () => {
       if (res.tts && res.tts.enabled) {
         speak(res.response, res.tts.audio_url);
       } else {
+        api.setLedState('IDLE');
         setTimeout(() => {
           setRobotState('idle');
           setStatusText('');
-        }, 3500);
+        }, 2500);
       }
     } catch (err: any) {
       setRobotState('error');
+      api.setLedState('ERROR');
       setStatusText(err.message || "Failed to reach Buddy backend.");
       setTimeout(() => {
         setRobotState('idle');
+        api.setLedState('IDLE');
         setStatusText('');
       }, 4000);
     }
@@ -256,6 +267,10 @@ export const App: React.FC = () => {
           onStopRecord={stopRecording}
           onStopSpeaking={stopSpeaking}
           onToggleMute={toggleMute}
+          activeMicLabel={activeMicLabel}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          audioOutputTarget={audioOutputTarget}
+          onSelectOutputTarget={setAudioOutputTarget}
         />
 
         {/* Suggestion Chips */}
@@ -380,6 +395,13 @@ export const App: React.FC = () => {
           config={config}
           health={health}
           onClose={() => setIsSettingsOpen(false)}
+          audioInputDevices={audioInputDevices}
+          selectedInputDeviceId={selectedInputDeviceId}
+          onSelectInputDevice={changeAudioInputDevice}
+          activeMicLabel={activeMicLabel}
+          onRefreshDevices={refreshAudioDevices}
+          audioOutputTarget={audioOutputTarget}
+          onSelectOutputTarget={setAudioOutputTarget}
         />
       )}
 

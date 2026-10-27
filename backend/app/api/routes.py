@@ -2,7 +2,7 @@ import shutil
 import uuid
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -100,9 +100,20 @@ def get_public_config():
     }
 
 
+def _stream_audio_to_esp32_bg(audio_path_str: str):
+    """Decodes and streams TTS audio file to the ESP32 MAX98357A speaker."""
+    try:
+        p = Path(audio_path_str)
+        if p.exists():
+            data = p.read_bytes()
+            esp32_client.stream_wav_to_speaker(data)
+    except Exception as e:
+        print(f"[ESP32 Speaker Stream] Error: {e}")
+
+
 # --- Chat Endpoint ---
 @router.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(req: ChatRequest):
+async def chat_endpoint(req: ChatRequest, background_tasks: BackgroundTasks):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
@@ -124,6 +135,8 @@ async def chat_endpoint(req: ChatRequest):
             synth = synthesize_speech(result["response"])
             if synth.get("enabled") and synth.get("audio_url"):
                 tts_meta["audio_url"] = synth.get("audio_url")
+                if synth.get("file_path"):
+                    background_tasks.add_task(_stream_audio_to_esp32_bg, synth["file_path"])
         except Exception as e:
             print(f"[Chat] Pre-synthesis error: {e}")
 
@@ -164,8 +177,22 @@ async def transcribe_voice(audio: UploadFile = File(...)):
 
 
 @router.post("/voice/speak")
-def speak_endpoint(req: SpeakRequest):
-    return synthesize_speech(req.text)
+def speak_endpoint(req: SpeakRequest, background_tasks: BackgroundTasks):
+    res = synthesize_speech(req.text)
+    if res.get("enabled") and res.get("file_path"):
+        background_tasks.add_task(_stream_audio_to_esp32_bg, res["file_path"])
+    return res
+
+
+@router.post("/hardware/stream-audio")
+def stream_audio_to_speaker(audio_url: str, background_tasks: BackgroundTasks):
+    """Streams an existing audio URL file directly to the ESP32 MAX98357A speaker."""
+    filename = Path(audio_url).name
+    target = AUDIO_DIR / filename
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    background_tasks.add_task(_stream_audio_to_esp32_bg, str(target))
+    return {"ok": True, "message": f"Streaming {filename} to ESP32 speaker"}
 
 
 @router.get("/voice/audio/{filename}")

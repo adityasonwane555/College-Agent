@@ -11,7 +11,74 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedInputDeviceId, setSelectedInputDeviceId] = useState<string>(() => {
+    return localStorage.getItem('buddy_audio_input_id') || 'default';
+  });
+  const [activeMicLabel, setActiveMicLabel] = useState<string>('Default Microphone');
+  const [audioOutputTarget, setAudioOutputTargetState] = useState<'robot' | 'laptop' | 'both'>(() => {
+    const saved = localStorage.getItem('buddy_audio_output_target');
+    if (!saved || saved === 'robot') {
+      localStorage.setItem('buddy_audio_output_target', 'both');
+      return 'both';
+    }
+    return saved as 'robot' | 'laptop' | 'both';
+  });
+
+  const setAudioOutputTarget = useCallback((target: 'robot' | 'laptop' | 'both') => {
+    setAudioOutputTargetState(target);
+    localStorage.setItem('buddy_audio_output_target', target);
+  }, []);
+
   const lockedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  // Enumerate input devices and keep activeMicLabel in sync
+  const refreshAudioDevices = useCallback(async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((d) => d.kind === 'audioinput');
+      setAudioInputDevices(inputs);
+
+      const savedId = localStorage.getItem('buddy_audio_input_id') || 'default';
+      if (savedId !== 'default') {
+        const match = inputs.find((d) => d.deviceId === savedId);
+        if (match && match.label) {
+          setActiveMicLabel(match.label);
+        } else if (inputs.length > 0 && inputs[0].label) {
+          setActiveMicLabel(inputs[0].label);
+        }
+      } else if (inputs.length > 0 && inputs[0].label) {
+        setActiveMicLabel(inputs[0].label);
+      }
+    } catch (err) {
+      console.warn("[Voice] Device enumeration error:", err);
+    }
+  }, []);
+
+  const changeAudioInputDevice = useCallback((deviceId: string) => {
+    setSelectedInputDeviceId(deviceId);
+    localStorage.setItem('buddy_audio_input_id', deviceId);
+    if (deviceId === 'default') {
+      const first = audioInputDevices.find((d) => d.label);
+      setActiveMicLabel(first ? `Default (${first.label})` : 'Default Microphone');
+    } else {
+      const match = audioInputDevices.find((d) => d.deviceId === deviceId);
+      if (match && match.label) {
+        setActiveMicLabel(match.label);
+      }
+    }
+  }, [audioInputDevices]);
+
+  useEffect(() => {
+    refreshAudioDevices();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', refreshAudioDevices);
+      return () => {
+        navigator.mediaDevices.removeEventListener('devicechange', refreshAudioDevices);
+      };
+    }
+  }, [refreshAudioDevices]);
 
   // Pre-load and strictly lock the assistant's voice persona on mount
   useEffect(() => {
@@ -50,9 +117,14 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const speechHeartbeatRef = useRef<number | null>(null);
+  const eqIntervalRef = useRef<number | null>(null);
 
   // Stop current speech playback
   const stopSpeaking = useCallback(() => {
+    if (eqIntervalRef.current) {
+      clearInterval(eqIntervalRef.current);
+      eqIntervalRef.current = null;
+    }
     if (speechHeartbeatRef.current) {
       clearInterval(speechHeartbeatRef.current);
       speechHeartbeatRef.current = null;
@@ -65,15 +137,10 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    setIsSpeaking((wasSpeaking) => {
-      if (wasSpeaking) {
-        api.setLedState('INTERRUPTED');
-      } else {
-        api.setLedState('IDLE');
-      }
-      return false;
-    });
-  }, []);
+    setIsSpeaking(false);
+    onStateChange('idle');
+    api.setLedState('IDLE');
+  }, [onStateChange]);
 
   // Multi-sentence chunked browser speech (prevents Chrome halting at periods/fullstops)
   const fallbackBrowserSpeech = useCallback((text: string) => {
@@ -154,7 +221,7 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         activeUtterancesRef.current = [];
         setIsSpeaking(false);
         onStateChange('idle');
-        api.setLedState('COMPLETED');
+        api.setLedState('IDLE');
         return;
       }
 
@@ -197,30 +264,68 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     stopSpeaking();
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const savedMicId = localStorage.getItem('buddy_audio_input_id') || selectedInputDeviceId;
+      const audioConstraints: MediaTrackConstraints = (savedMicId && savedMicId !== 'default')
+        ? { deviceId: { exact: savedMicId } }
+        : {};
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      } catch (err) {
+        console.warn("[Voice] Exact mic constraint failed, falling back to default:", err);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
+      // Update actual active microphone label from active track
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack && audioTrack.label) {
+        setActiveMicLabel(audioTrack.label);
+      }
+      refreshAudioDevices();
+
       audioChunksRef.current = [];
 
-      const recorder = new MediaRecorder(stream);
+      // Determine the best supported mimeType across Chrome, Edge, Firefox, Safari
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+          mimeType = 'audio/ogg;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else {
+          mimeType = '';
+        }
+      }
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       recorder.onstop = async () => {
-        // Stop audio tracks
+        // Stop audio tracks to release microphone hardware immediately
         stream.getTracks().forEach((track) => track.stop());
         setIsRecording(false);
 
         if (audioChunksRef.current.length === 0) {
+          console.warn("[Voice] No audio chunks captured by microphone.");
+          onError("No audio detected. Please check your microphone connection and speak clearly.");
           onStateChange('idle');
           api.setLedState('IDLE');
           return;
         }
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const effectiveMimeType = recorder.mimeType || mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: effectiveMimeType });
+        console.log(`[Voice] Audio captured: ${audioBlob.size} bytes (${effectiveMimeType})`);
+
         try {
           onStateChange('thinking' as any);
           api.setLedState('THINKING');
@@ -239,7 +344,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         }
       };
 
-      recorder.start();
+      // Crucial: Pass 100ms timeslice so ondataavailable continuously buffers audio chunks
+      recorder.start(100);
       setIsRecording(true);
       onStateChange('listening');
       api.setLedState('LISTENING');
@@ -247,13 +353,13 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       setIsRecording(false);
       onStateChange('error');
       api.setLedState('ERROR');
-      if (err.name === 'NotAllowedError') {
-        onError("Microphone access was denied. Please allow microphone permissions in your browser.");
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        onError("Microphone access was denied. Please allow microphone permissions in your browser address bar.");
       } else {
-        onError(`Microphone error: ${err.message}`);
+        onError(`Microphone error: ${err.message || err.name}`);
       }
     }
-  }, [onStateChange, onTranscriptionComplete, onError, stopSpeaking]);
+  }, [onStateChange, onTranscriptionComplete, onError, stopSpeaking, selectedInputDeviceId, refreshAudioDevices]);
 
   // Stop Recording
   const stopRecording = useCallback(() => {
@@ -270,9 +376,13 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     // Helper to play WAV/MP3 audio element
     const playAudioUrl = async (url: string) => {
       const fullUrl = `http://${API_HOST}:8000${url}`;
-      console.log("[Voice] Playing audio from:", fullUrl);
+      const outputTarget = (localStorage.getItem('buddy_audio_output_target') as 'robot' | 'laptop' | 'both') || 'both';
+      console.log(`[Voice] Playing audio (${outputTarget} destination):`, fullUrl);
       const audio = new Audio(fullUrl);
-      audio.volume = 1.0;
+      
+      // When 'robot' is selected, mute the local laptop audio element.
+      // If 'laptop' or 'both' (default) is selected, play at full volume (1.0).
+      audio.volume = outputTarget === 'robot' ? 0.0 : 1.0;
       const savedSinkId = localStorage.getItem('buddy_audio_output_id');
       if (savedSinkId && savedSinkId !== 'default' && 'setSinkId' in HTMLMediaElement.prototype) {
         try {
@@ -283,35 +393,23 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       }
       currentAudioRef.current = audio;
 
-      // Audio playback start: Transition hardware LED to SPEAKING state
+      // Audio playback start: Transition hardware to SPEAKING state
       audio.onplay = () => {
         setIsSpeaking(true);
         onStateChange('speaking');
-        api.setLedState('SPEAKING');
-
-        // Dynamic Equalizer Modulation (~10 Hz)
-        // Blinks and pulses high/low notes in rhythm with speech cadence without touching audio playback
-        let tick = 0;
-        const eqInterval = window.setInterval(() => {
-          if (currentAudioRef.current !== audio || audio.paused) {
-            clearInterval(eqInterval);
-            return;
-          }
-          tick++;
-          const bass = 0.35 + 0.65 * Math.abs(Math.sin(tick * 0.45));
-          const mid = 0.40 + 0.60 * Math.abs(Math.cos(tick * 0.75));
-          const treble = (tick % 3 === 0) ? 0.95 : (0.15 + 0.35 * Math.abs(Math.sin(tick * 1.3)));
-          const amp = 0.50 + 0.50 * Math.abs(Math.sin(tick * 0.55));
-          api.setLedState('SPEAKING', amp, bass, mid, treble);
-        }, 100);
+        api.setLedState('SPEAKING', 0.8);
       };
 
-      // Audio playback completion: Transition hardware LED to COMPLETED then IDLE
+      // Audio playback completion: Transition hardware to IDLE immediately
       audio.onended = () => {
+        if (eqIntervalRef.current) {
+          clearInterval(eqIntervalRef.current);
+          eqIntervalRef.current = null;
+        }
         setIsSpeaking(false);
         currentAudioRef.current = null;
         onStateChange('idle');
-        api.setLedState('COMPLETED');
+        api.setLedState('IDLE');
       };
 
       audio.onerror = (e) => {
@@ -390,6 +488,13 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     stopRecording,
     stopSpeaking,
     speak,
-    playInstantAcknowledgment
+    playInstantAcknowledgment,
+    audioInputDevices,
+    selectedInputDeviceId,
+    changeAudioInputDevice,
+    activeMicLabel,
+    refreshAudioDevices,
+    audioOutputTarget,
+    setAudioOutputTarget
   };
 }
