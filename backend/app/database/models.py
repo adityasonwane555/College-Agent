@@ -37,6 +37,10 @@ class FacultyModel(BaseModel):
     cabin: str
     email: str
     office_hours: str
+    qualification: Optional[str] = ""
+    experience: Optional[str] = ""
+    area_of_interest: Optional[str] = ""
+    research_profile: Optional[str] = ""
 
 
 class CollegeHoursModel(BaseModel):

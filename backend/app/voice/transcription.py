@@ -60,14 +60,29 @@ def is_whisper_installed() -> bool:
         return False
 
 
+def is_cuda_supported_and_loaded() -> bool:
+    """Tests whether CUDA runtime and cublas64_12.dll can actually be loaded without crashing."""
+    try:
+        import ctypes
+        import ctranslate2
+        if "cuda" not in ctranslate2.get_supported_compute_types("cuda"):
+            return False
+        ctypes.CDLL("cublas64_12.dll")
+        return True
+    except Exception:
+        return False
+
+
 def get_whisper_model(force_cpu: bool = False):
     """Lazily loads the faster-whisper model only when transcription is explicitly requested."""
     global _whisper_model
     if force_cpu or _whisper_model is None:
         try:
             from faster_whisper import WhisperModel
-            device = "cpu" if force_cpu else settings.STT_DEVICE
-            compute_type = "int8" if device == "cpu" else "float16"
+            cuda_ready = (not force_cpu) and (settings.STT_DEVICE == "cuda") and is_cuda_supported_and_loaded()
+            device = "cuda" if cuda_ready else "cpu"
+            compute_type = "float16" if cuda_ready else "int8"
+            
             try:
                 model = WhisperModel(
                     settings.STT_MODEL,

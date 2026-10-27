@@ -38,17 +38,24 @@ def get_room(room_name: str) -> str:
 
 
 def get_faculty(name: str) -> str:
-    """Look up faculty member details, department, cabin location, and office consulting hours."""
+    """Look up faculty member details, department, cabin location, qualification, experience, areas of interest, and office consulting hours."""
     members = repo.get_faculty(name)
     if not members:
         return f"No faculty member matching '{name}' was found in the official faculty directory."
     formatted = []
     for f in members:
-        formatted.append(
-            f"{f['name']} serves as {f['designation']} in {f['department']}. "
-            f"Their office is in {f['cabin']}. Consulting office hours are {f['office_hours']}, "
-            f"and their email address is {f['email']}."
-        )
+        details = [f"{f['name']} serves as {f['designation']} in {f['department']}."]
+        if f.get('qualification'):
+            details.append(f"Qualification: {f['qualification']}.")
+        if f.get('experience'):
+            details.append(f"Teaching/Experience: {f['experience']}.")
+        if f.get('area_of_interest'):
+            details.append(f"Area of Interest: {f['area_of_interest']}.")
+        details.append(f"Their office or lab is located in {f['cabin']}.")
+        details.append(f"Office consulting hours are {f['office_hours']}, and email ID is {f['email']}.")
+        if f.get('research_profile'):
+            details.append(f"Research profile: {f['research_profile']}.")
+        formatted.append(" ".join(details))
     return " ".join(formatted)
 
 

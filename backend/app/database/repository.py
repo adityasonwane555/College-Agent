@@ -68,9 +68,20 @@ class DatabaseRepository:
                 designation TEXT NOT NULL,
                 cabin TEXT NOT NULL,
                 email TEXT NOT NULL,
-                office_hours TEXT NOT NULL
+                office_hours TEXT NOT NULL,
+                qualification TEXT DEFAULT '',
+                experience TEXT DEFAULT '',
+                area_of_interest TEXT DEFAULT '',
+                research_profile TEXT DEFAULT ''
             )
             """)
+
+            # Migration check for existing databases
+            cursor.execute("PRAGMA table_info(faculty)")
+            existing_cols = [col[1] for col in cursor.fetchall()]
+            for col_name in ["qualification", "experience", "area_of_interest", "research_profile"]:
+                if col_name not in existing_cols:
+                    cursor.execute(f"ALTER TABLE faculty ADD COLUMN {col_name} TEXT DEFAULT ''")
 
             # College Hours Table
             cursor.execute("""
@@ -227,9 +238,13 @@ class DatabaseRepository:
             wildcard = f"%{name_query.strip()}%"
             cursor.execute("""
                 SELECT * FROM faculty 
-                WHERE LOWER(name) LIKE LOWER(?) OR LOWER(department) LIKE LOWER(?)
-                LIMIT 5
-            """, (wildcard, wildcard))
+                WHERE LOWER(name) LIKE LOWER(?) 
+                   OR LOWER(department) LIKE LOWER(?) 
+                   OR LOWER(designation) LIKE LOWER(?) 
+                   OR LOWER(area_of_interest) LIKE LOWER(?)
+                   OR LOWER(email) LIKE LOWER(?)
+                LIMIT 15
+            """, (wildcard, wildcard, wildcard, wildcard, wildcard))
             return [dict(row) for row in cursor.fetchall()]
 
     def list_faculty(self) -> List[Dict[str, Any]]:
@@ -242,9 +257,12 @@ class DatabaseRepository:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO faculty (name, department, designation, cabin, email, office_hours)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (fac.name, fac.department, fac.designation, fac.cabin, fac.email, fac.office_hours))
+                INSERT INTO faculty (name, department, designation, cabin, email, office_hours, qualification, experience, area_of_interest, research_profile)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                fac.name, fac.department, fac.designation, fac.cabin, fac.email, fac.office_hours,
+                fac.qualification or "", fac.experience or "", fac.area_of_interest or "", fac.research_profile or ""
+            ))
             conn.commit()
             return cursor.lastrowid
 

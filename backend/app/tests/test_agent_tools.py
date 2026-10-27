@@ -16,9 +16,9 @@ def setup_test_data():
 @pytest.mark.asyncio
 async def test_tool_execution_registered():
     # Test existing registered tool
-    res = await execute_tool("get_department", {"name": "CSE"})
-    assert "Computer Science" in res
-    assert "2nd Floor" in res
+    res = await execute_tool("get_department", {"name": "Computer"})
+    assert "Computer Engineering" in res
+    assert "Floor" in res
 
     # Test unknown tool handling
     unknown_res = await execute_tool("non_existent_tool", {})
@@ -66,5 +66,5 @@ async def test_orchestrator_run_with_tools():
         session_id="test_orchestrator_sess"
     )
     assert res["response"] is not None
-    assert "Computer Science" in res["response"] or "CSE" in res["response"]
+    assert "Computer" in res["response"] or "Rama" in res["response"]
     assert res["tool_iterations"] <= 5

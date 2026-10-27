@@ -7,8 +7,8 @@ from fastapi import HTTPException
 
 
 @pytest.mark.asyncio
-async def test_disabled_web_search():
-    # settings.WEB_SEARCH_ENABLED is False by default
+async def test_disabled_web_search(monkeypatch):
+    monkeypatch.setattr(settings, "WEB_SEARCH_ENABLED", False)
     res = await search_internet("latest AI research")
     assert res["status"] == "disabled"
     assert "disabled in configuration" in res["message"]

@@ -27,6 +27,7 @@ The APCOER campus is located at the foot of historic Parvati Hills in Pune and c
    - High-Performance Computing & GPU Labs
 4. Third Floor:
    - Information Technology (IT) Department (HOD: Dr. Amit Ashokrao Kadam, Room 304)
+     * IT Faculty Team: Dr. Amit Ashokrao Kadam (Head & Assoc. Prof, Blockchain/Cybersecurity/IoT), Prof. D. P. Rankhambe (Asst. Prof, Room 327 OS Lab), Prof. R. S. Lavhe (Asst. Prof, Info Security), Prof. S. R. Kokane (Asst. Prof, Room 303 Software Testing Lab), Prof. A. N. Kalal (Asst. Prof, Room 332 Multimedia Lab), Prof. Rajshri Nikam (Asst. Prof, Room 331 Network Lab), Prof. A. R. Dodke (Asst. Prof, Room 328 Web Engg Lab), Prof. Dipalee Shah (Asst. Prof, Data Structures), Prof. Prajakta G. Khaire (Asst. Prof, Room 301 Microprocessor Lab), Prof. Shital S. Khote (Asst. Prof, Room 330 Distributed Systems Lab), Mr. Ajinkya Patil (Lab Assistant).
    - Electronics & Telecommunication (E&TC) Department (HOD: Dr. Amar Deshmukh, Room 323)
    - Language Laboratory & Internet Resource Center
 5. Fourth Floor:

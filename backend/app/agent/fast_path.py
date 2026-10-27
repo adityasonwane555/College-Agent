@@ -93,7 +93,11 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
         }
 
     # 3. Faculty / HOD queries (Verified Current Leadership)
-    if any(k in clean for k in ["hod", "head of department", "head of", "faculty", "professor", "cabin", "gaikwad", "rama", "kadam", "amit", "musale", "jitendra", "sorate", "raviraj", "amar", "selukar", "balaji", "newase", "atul", "totla", "kamble", "jagtap", "thakare"]):
+    if any(k in clean for k in [
+        "hod", "head of department", "head of", "faculty", "professor", "professors", "teacher", "teachers", "staff", "cabin",
+        "gaikwad", "rama", "kadam", "amit", "musale", "jitendra", "sorate", "raviraj", "amar", "selukar", "balaji", "newase", "atul", "totla", "kamble", "jagtap", "thakare",
+        "rankhambe", "devika", "lavhe", "ramesh", "kokane", "sayali", "kalal", "ashok", "nikam", "rajshri", "dodke", "akash", "dipalee", "shah", "khaire", "prajakta", "khote", "shital", "ajinkya", "patil"
+    ]):
         # Computer Engineering
         if "computer" in clean or "cs" in clean or "comp" in clean or "gaikwad" in clean or "rama" in clean:
             return {
@@ -106,7 +110,139 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
                 "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Computer Engineering", snippet="Dr. Rama B. Gaikwad - Professor & Head of Department")]
             }
 
-        # Information Technology (IT)
+        # Information Technology (IT) Faculty Specific Queries
+        if any(f in clean for f in ["rankhambe", "devika"]):
+            return {
+                "response": (
+                    "Prof. D. P. Rankhambe is an Assistant Professor in the Information Technology Department. "
+                    "She holds an M.E. in CSE with over 11 years of teaching experience. "
+                    "Her areas of interest include HCI, Big Data, Cloud Computing, DBMS, and STQA. "
+                    "Her lab is Room 327 (Operating System Lab) on the third floor, with consulting hours Monday through Friday from 11:00 AM to 1:00 PM. "
+                    "You can reach her at rankhambedevika@gmail.com. Would you like directions to Room 327?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. D. P. Rankhambe - Assistant Professor, IT (Room 327, Operating System Lab)")]
+            }
+
+        if any(f in clean for f in ["lavhe", "ramesh"]):
+            return {
+                "response": (
+                    "Prof. R. S. Lavhe serves as Assistant Professor in the Information Technology Department. "
+                    "He holds an M.E. in Information Technology with over 11.5 years of teaching experience, specializing in Information Security. "
+                    "His office is in the IT Faculty Room on the third floor, and he is available from 11:00 AM to 1:00 PM on weekdays. "
+                    "His email is ramesh.lavhe@abmspcoerpune.org. Would you like directions to the third floor IT faculty room?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. R. S. Lavhe - Assistant Professor, IT (IT Faculty Room, 3rd Floor)")]
+            }
+
+        if any(f in clean for f in ["kokane", "sayali"]):
+            return {
+                "response": (
+                    "Prof. S. R. Kokane is an Assistant Professor in the Information Technology Department. "
+                    "She holds an M.E. in CE and is pursuing her PhD, with over 11 years of teaching experience in IoT and AI. "
+                    "She oversees Room 303 (Software Design & Testing Lab) on the third floor, and her office hours are from 2:00 PM to 4:00 PM on weekdays. "
+                    "You can contact her at sayali.kokane@abmspcoerpune.org. May I guide you to Room 303?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. S. R. Kokane - Assistant Professor, IT (Room 303, Software Design & Testing Lab)")]
+            }
+
+        if any(f in clean for f in ["kalal", "ashok"]):
+            return {
+                "response": (
+                    "Prof. A. N. Kalal is an Assistant Professor in the Information Technology Department. "
+                    "He holds an M.Tech in Computer Science with over 12 years of experience. His domains include Database, Data Mining, Cloud Computing, and Machine Learning. "
+                    "His lab is Room 332 (Multimedia Lab) on the third floor, with consulting hours between 11:00 AM and 1:00 PM on weekdays. "
+                    "His email is ashok.kalal@abmspcoerpune.org. Would you like directions to Room 332?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. A. N. Kalal - Assistant Professor, IT (Room 332, Multimedia Lab)")]
+            }
+
+        if any(f in clean for f in ["nikam", "rajshri"]):
+            return {
+                "response": (
+                    "Prof. Rajshri Nikam is an Assistant Professor in the Information Technology Department. "
+                    "She holds a B.E. and M.E. in IT with 11.5 years of teaching experience, specializing in Data Mining. "
+                    "Her lab is Room 331 (Network Lab) on the third floor, with consulting hours Monday through Friday from 11:00 AM to 1:00 PM. "
+                    "You can reach her at rajshri.nikam@abmspcoerpune.org. Let me know if you would like directions to Room 331!"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. Rajshri Nikam - Assistant Professor, IT (Room 331, Network Lab)")]
+            }
+
+        if any(f in clean for f in ["dodke", "akash"]):
+            return {
+                "response": (
+                    "Prof. A. R. Dodke is an Assistant Professor in Information Technology. "
+                    "He holds an M.E. in Computer Engineering with 9 years of teaching experience, specializing in Software Quality Assurance. "
+                    "He manages Room 328 (Web Engineering Technology Lab) on the third floor, available from 10:00 AM to 12:00 PM on weekdays. "
+                    "His email is akash.dodke@abmspcoerpune.org. Would you like directions to Room 328?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. A. R. Dodke - Assistant Professor, IT (Room 328, Web Engineering Lab)")]
+            }
+
+        if any(f in clean for f in ["dipalee", "shah"]):
+            return {
+                "response": (
+                    "Prof. Dipalee Shah serves as Assistant Professor in the Information Technology Department. "
+                    "She holds a B.E. in IT and M.E. in Computer Engineering, bringing 1.3 years of teaching and 5 years 4 months of industry experience in Data Structures, DBMS, and Data Engineering. "
+                    "Her office is in the IT Faculty Room on the third floor. You can reach her at dipalee.shah@abmspcoerpune.org. "
+                    "Would you like directions to the IT department?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. Dipalee Shah - Assistant Professor, IT (3rd Floor)")]
+            }
+
+        if any(f in clean for f in ["khaire", "prajakta"]):
+            return {
+                "response": (
+                    "Prof. Prajakta G. Khaire is an Assistant Professor in the Information Technology Department. "
+                    "She holds an M.Tech in Computer Engineering with research interests in Machine Learning, Data Analytics, and DBMS. "
+                    "She is in charge of Room 301 (Microprocessor Lab) on the third floor, available from 10:30 AM to 12:30 PM on weekdays. "
+                    "Her email is prajakta.khaire@abmspcoerpune.org. May I guide you to Room 301?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. Prajakta G. Khaire - Assistant Professor, IT (Room 301, Microprocessor Lab)")]
+            }
+
+        if any(f in clean for f in ["khote", "shital"]):
+            return {
+                "response": (
+                    "Prof. Shital S. Khote is an Assistant Professor in the Information Technology Department. "
+                    "She holds an M.E. in Computer Engineering with teaching experience in DBMS and Machine Learning. "
+                    "She is in charge of Room 330 (Distributed System Lab) on the third floor, available between 2:00 PM and 4:00 PM on weekdays. "
+                    "Her email is shital.khote@abmspcoerpune.org. Would you like directions to Room 330?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Prof. Shital S. Khote - Assistant Professor, IT (Room 330, Distributed System Lab)")]
+            }
+
+        if any(f in clean for f in ["ajinkya", "patil"]):
+            return {
+                "response": (
+                    "Mr. Ajinkya Patil is the Lab Assistant in the Information Technology Department. "
+                    "He holds an MCA degree with 4 years of technical experience in laboratory administration. "
+                    "His office is in the IT Department Laboratories on the third floor, and his email is ajinkya.patil@abmspcoerpune.org. "
+                    "Feel free to ask if you need help finding any of the IT computer labs!"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="Mr. Ajinkya Patil - Lab Assistant, IT (3rd Floor Labs)")]
+            }
+
+        # Information Technology (IT) Roster or HOD
+        if ("it" in clean or "information technology" in clean) and any(term in clean for term in ["faculty", "professor", "professors", "teachers", "staff", "members", "team", "roster", "list"]):
+            return {
+                "response": (
+                    "The Information Technology (IT) Department is headed by Dr. Amit Ashokrao Kadam (Head & Associate Professor, Room 304). "
+                    "The department's teaching and technical team includes Prof. D. P. Rankhambe (Assistant Professor, Operating System Lab Room 327), "
+                    "Prof. R. S. Lavhe (Assistant Professor, Information Security), "
+                    "Prof. S. R. Kokane (Assistant Professor, Software Design & Testing Lab Room 303), "
+                    "Prof. A. N. Kalal (Assistant Professor, Multimedia Lab Room 332), "
+                    "Prof. Rajshri Nikam (Assistant Professor, Network Lab Room 331), "
+                    "Prof. A. R. Dodke (Assistant Professor, Web Engineering Lab Room 328), "
+                    "Prof. Dipalee Shah (Assistant Professor, Data Structures & Data Engineering), "
+                    "Prof. Prajakta G. Khaire (Assistant Professor, Microprocessor Lab Room 301), "
+                    "Prof. Shital S. Khote (Assistant Professor, Distributed System Lab Room 330), "
+                    "and Mr. Ajinkya Patil (Lab Assistant). "
+                    "All IT faculty cabins and specialized computing laboratories are situated on the 3rd floor of the Main Academic Building. "
+                    "Would you like details on any particular faculty member or directions to their lab?"
+                ),
+                "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="IT Department Faculty Roster: Dr. Amit Ashokrao Kadam (HOD), Prof. D. P. Rankhambe, Prof. R. S. Lavhe, Prof. S. R. Kokane, Prof. A. N. Kalal, Prof. Rajshri Nikam, Prof. A. R. Dodke, Prof. Dipalee Shah, Prof. Prajakta G. Khaire, Prof. Shital S. Khote, Mr. Ajinkya Patil (3rd Floor)")]
+            }
+
         if "information technology" in clean or "it" in clean or "kadam" in clean or "amit" in clean:
             return {
                 "response": (

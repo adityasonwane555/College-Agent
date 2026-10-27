@@ -281,10 +281,14 @@ def seed_database(force: bool = False):
         FacultyModel(
             name="Dr. Amit Ashokrao Kadam",
             department="Information Technology",
-            designation="Head of Department & Associate Professor",
+            designation="Head & Associate Professor",
             cabin="Room 304, IT HOD Cabin, 3rd Floor",
             email="amit.kadam@abmspcoerpune.org",
-            office_hours="Mon - Fri: 10:00 AM - 1:00 PM"
+            office_hours="Mon - Fri: 10:00 AM - 1:00 PM",
+            qualification="M.E, PhD",
+            experience="10.6 Years",
+            area_of_interest="Blockchain Technology, Cyber Security, IOT etc.",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
         ),
         FacultyModel(
             name="Dr. Jitendra Musale",
@@ -351,28 +355,124 @@ def seed_database(force: bool = False):
             office_hours="Mon - Fri: 11:00 AM - 1:00 PM"
         ),
         FacultyModel(
-            name="Prof. Devika P. Rankhambe",
+            name="Prof. D. P. Rankhambe",
             department="Information Technology",
             designation="Assistant Professor",
-            cabin="IT Faculty Room, 3rd Floor",
+            cabin="Room 327 (Operating System Lab) / IT Faculty Room, 3rd Floor",
             email="rankhambedevika@gmail.com",
-            office_hours="Mon - Fri: 11:00 AM - 1:00 PM"
+            office_hours="Mon - Fri: 11:00 AM - 1:00 PM",
+            qualification="M.E. (CSE)",
+            experience="11+ Years",
+            area_of_interest="HCI, Big data, Cloud Computing, DBMS, STQA",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
         ),
         FacultyModel(
-            name="Prof. Ramesh S. Lavhe",
+            name="Prof. R. S. Lavhe",
             department="Information Technology",
             designation="Assistant Professor",
             cabin="IT Faculty Room, 3rd Floor",
             email="ramesh.lavhe@abmspcoerpune.org",
-            office_hours="Mon - Fri: 11:00 AM - 1:00 PM"
+            office_hours="Mon - Fri: 11:00 AM - 1:00 PM",
+            qualification="M.E. (I.T)",
+            experience="11.5+ Years",
+            area_of_interest="Information Security",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
         ),
         FacultyModel(
-            name="Prof. Sayali R. Kokane",
+            name="Prof. S. R. Kokane",
+            department="Information Technology",
+            designation="Assistant Professor",
+            cabin="Room 303 (Software Design Testing Lab) / IT Faculty Room, 3rd Floor",
+            email="sayali.kokane@abmspcoerpune.org",
+            office_hours="Mon - Fri: 2:00 PM - 4:00 PM",
+            qualification="M.E. (CE) ,PhD(Appearing)",
+            experience="11+ Years",
+            area_of_interest="IoT, AI",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
+        ),
+        FacultyModel(
+            name="Prof. A. N. Kalal",
+            department="Information Technology",
+            designation="Assistant Professor",
+            cabin="Room 332 (Multimedia Lab) / IT Faculty Room, 3rd Floor",
+            email="ashok.kalal@abmspcoerpune.org",
+            office_hours="Mon - Fri: 11:00 AM - 1:00 PM",
+            qualification="M.Tech (Computer Science)",
+            experience="12+ Years",
+            area_of_interest="Database, Data Mining, Cloud Computing, Machine Learning",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
+        ),
+        FacultyModel(
+            name="Prof. Rajshri Nikam",
+            department="Information Technology",
+            designation="Assistant Professor",
+            cabin="Room 331 (Network Lab) / IT Faculty Room, 3rd Floor",
+            email="rajshri.nikam@abmspcoerpune.org",
+            office_hours="Mon - Fri: 11:00 AM - 1:00 PM",
+            qualification="B.E., M.E (IT)",
+            experience="11.5 Years",
+            area_of_interest="Data Mining",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
+        ),
+        FacultyModel(
+            name="Prof. A. R. Dodke",
+            department="Information Technology",
+            designation="Assistant Professor",
+            cabin="Room 328 (Web Engineering Technology Lab) / IT Faculty Room, 3rd Floor",
+            email="akash.dodke@abmspcoerpune.org",
+            office_hours="Mon - Fri: 10:00 AM - 12:00 PM",
+            qualification="M.E(Computer Engg.)",
+            experience="9 Years",
+            area_of_interest="Software Quality & Assurance",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
+        ),
+        FacultyModel(
+            name="Prof. Dipalee Shah",
             department="Information Technology",
             designation="Assistant Professor",
             cabin="IT Faculty Room, 3rd Floor",
-            email="sayali.kokane@abmspcoerpune.org",
-            office_hours="Mon - Fri: 2:00 PM - 4:00 PM"
+            email="dipalee.shah@abmspcoerpune.org",
+            office_hours="Mon - Fri: 11:00 AM - 1:00 PM",
+            qualification="BE (IT), ME - Computer Engineering",
+            experience="1.3 yrs (Industry experience: 5yrs 4 months)",
+            area_of_interest="Data Structures, DBMS, Data Engineering",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
+        ),
+        FacultyModel(
+            name="Prof. Prajakta G. Khaire",
+            department="Information Technology",
+            designation="Assistant Professor",
+            cabin="Room 301 (Microprocessor Lab) / IT Faculty Room, 3rd Floor",
+            email="prajakta.khaire@abmspcoerpune.org",
+            office_hours="Mon - Fri: 10:30 AM - 12:30 PM",
+            qualification="M.Tech Computer",
+            experience="NA",
+            area_of_interest="Machine Learning, Data Analytics, DBMS",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
+        ),
+        FacultyModel(
+            name="Prof. Shital S. Khote",
+            department="Information Technology",
+            designation="Assistant Professor",
+            cabin="Room 330 (Distributed System Lab) / IT Faculty Room, 3rd Floor",
+            email="shital.khote@abmspcoerpune.org",
+            office_hours="Mon - Fri: 2:00 PM - 4:00 PM",
+            qualification="M.E Comp Engg",
+            experience="1 year",
+            area_of_interest="DBMS, Machine Learning",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
+        ),
+        FacultyModel(
+            name="Mr. Ajinkya Patil",
+            department="Information Technology",
+            designation="Lab Assistant",
+            cabin="IT Department Laboratories, 3rd Floor",
+            email="ajinkya.patil@abmspcoerpune.org",
+            office_hours="Mon - Sat: 9:00 AM - 5:00 PM",
+            qualification="MCA",
+            experience="4 Years",
+            area_of_interest="Lab Management, Technical Support",
+            research_profile="https://abmspcoerpune.org/information-technology/information-technology-faculty/"
         ),
     ]
     for fac in faculty:

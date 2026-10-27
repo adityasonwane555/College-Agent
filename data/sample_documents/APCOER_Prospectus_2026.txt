@@ -11,7 +11,7 @@ SECTION: Academic Undergraduate & Postgraduate Programs Offered
 Undergraduate B.Tech / B.E. Programs (4 Years):
 1. Computer Engineering (Intake: 120 seats) - HOD: Dr. Rama B. Gaikwad
 2. Artificial Intelligence and Data Science (AI & DS) (Intake: 60 seats) - HOD: Dr. Jitendra Musale
-3. Information Technology (IT) (Intake: 60 seats) - HOD: Dr. Amit Ashokrao Kadam
+3. Information Technology (IT) (Intake: 60 seats) - HOD: Dr. Amit Ashokrao Kadam (Core Faculty: Prof. D. P. Rankhambe, Prof. R. S. Lavhe, Prof. S. R. Kokane, Prof. A. N. Kalal, Prof. Rajshri Nikam, Prof. A. R. Dodke, Prof. Dipalee Shah, Prof. Prajakta G. Khaire, Prof. Shital S. Khote, Mr. Ajinkya Patil)
 4. Electronics and Telecommunication Engineering (E&TC) (Intake: 60 seats) - HOD: Dr. Amar Deshmukh
 5. Civil Engineering (Intake: 60 seats) - HOD: Dr. Raviraj Ramesh Sorate
 6. Mechanical Engineering (Intake: 60 seats) - HOD: Dr. Dattatray P. Kamble
