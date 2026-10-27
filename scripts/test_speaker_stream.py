@@ -11,13 +11,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
+from app.config import settings
 from app.hardware.esp32_client import esp32_client
 from app.voice.synthesis import synthesize_speech
 
 
 def main():
     parser = argparse.ArgumentParser(description="Test ESP32 MAX98357A Speaker Audio Stream")
-    parser.add_argument("--url", type=str, default="http://192.168.1.5", help="ESP32 IP or URL")
+    parser.add_argument("--url", type=str, default=settings.ESP32_LED_URL, help="ESP32 IP or URL")
     parser.add_argument("--text", type=str, default="Welcome to Anantrao Pawar College of Engineering and Research, Pune. How can I assist you today?", help="Text to speak")
     args = parser.parse_args()
 

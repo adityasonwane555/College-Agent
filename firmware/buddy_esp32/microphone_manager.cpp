@@ -88,6 +88,7 @@ size_t MicrophoneManager::readSamples(int16_t* outBuffer, size_t maxSamples) {
   size_t samplesRead = bytesRead / sizeof(int32_t);
   int64_t sumSquares = 0;
 
+  for (size_t i = 0; i < samplesRead; i++) {
     // INMP441 24-bit data sits in the upper bits of the 32-bit word.
     // Scale and clamp strictly within signed 16-bit bounds [-32768, 32767] to avoid wrap-around distortion
     int32_t val32 = _rawBuffer[i] >> 14;

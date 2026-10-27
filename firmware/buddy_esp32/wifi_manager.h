@@ -34,6 +34,7 @@ private:
   void handleDisplay();
   void handleChime();
   void handleMicStream();
+  void handleMicRecord();
   void handleSpeakStream();
 };
 

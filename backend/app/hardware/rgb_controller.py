@@ -147,8 +147,8 @@ class RGBController:
     def normalize_state(self, state: str) -> str:
         """Normalizes and validates incoming state string."""
         s = state.strip().upper()
-        if s in ("COMPLETED_SPEECH", "FINISHED", "DONE"):
-            return "COMPLETED"
+        if s in ("COMPLETED_SPEECH", "FINISHED", "DONE", "COMPLETED", "INTERRUPTED", "HAPPY"):
+            return "IDLE"
         if s not in VALID_STATES:
             raise ValueError(f"Invalid state '{state}'. Valid states: {sorted(list(VALID_STATES))}")
         return s

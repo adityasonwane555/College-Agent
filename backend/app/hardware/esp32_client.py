@@ -90,21 +90,46 @@ class ESP32Client:
             logger.warning(f"Failed to trigger chime: {e}")
             return False
 
-    def stream_wav_to_speaker(self, wav_bytes: bytes) -> bool:
+    def stream_wav_to_speaker(self, audio_bytes: bytes, sample_rate: int = 24000) -> bool:
         """
-        Parses a WAV file and streams raw 16-bit PCM to the MAX98357A speaker.
+        Decodes any audio file (MP3, WAV, etc.) into 16-bit mono PCM and streams it
+        directly to the ESP32 MAX98357A speaker over Wi-Fi.
         """
         try:
-            with io.BytesIO(wav_bytes) as bio:
-                with wave.open(bio, "rb") as wf:
-                    raw_pcm = wf.readframes(wf.getnframes())
+            raw_pcm = b""
+            # Use PyAV for universal audio decoding (MP3 from edge-tts, WAV from Fish Audio, etc.)
+            try:
+                import av
+                container = av.open(io.BytesIO(audio_bytes))
+                resampler = av.AudioResampler(format='s16', layout='mono', rate=sample_rate)
+                chunks = []
+                for frame in container.decode(audio=0):
+                    for rframe in resampler.resample(frame):
+                        chunks.append(rframe.to_ndarray().tobytes())
+                raw_pcm = b"".join(chunks)
+            except Exception as av_err:
+                # Fallback to standard library wave module for WAV
+                with io.BytesIO(audio_bytes) as bio:
+                    with wave.open(bio, "rb") as wf:
+                        raw_pcm = wf.readframes(wf.getnframes())
 
-            with httpx.Client(timeout=15.0) as client:
+            if not raw_pcm:
+                logger.warning("Decoded PCM audio buffer is empty.")
+                return False
+
+            with httpx.Client(timeout=25.0) as client:
+                url = f"{self.base_url}/api/speak/raw"
                 resp = client.post(
-                    f"{self.base_url}/api/speak/raw",
+                    url,
                     content=raw_pcm,
                     headers={"Content-Type": "application/octet-stream"}
                 )
+                if resp.status_code == 404:
+                    resp = client.post(
+                        f"{self.base_url}/api/speak",
+                        content=raw_pcm,
+                        headers={"Content-Type": "application/octet-stream"}
+                    )
                 return resp.status_code == 200
         except Exception as e:
             logger.warning(f"Failed to stream audio to ESP32 speaker: {e}")
@@ -113,15 +138,46 @@ class ESP32Client:
     def fetch_mic_recording(self, seconds: int = 3) -> Optional[bytes]:
         """
         Downloads a recorded WAV clip from the ESP32 INMP441 microphone.
+        Supports both the dedicated /api/mic/record endpoint and chunked /api/mic fallback.
         """
         try:
             with httpx.Client(timeout=seconds + 8.0) as client:
                 resp = client.get(f"{self.base_url}/api/mic/record?seconds={seconds}")
-                if resp.status_code == 200:
+                if resp.status_code == 200 and len(resp.content) > 44:
                     return resp.content
+                elif resp.status_code == 404:
+                    # Fallback for firmware running without /api/mic/record
+                    logger.info("ESP32 /api/mic/record not found, falling back to /api/mic sample capture...")
+                    pcm_chunks = []
+                    start_t = time.time()
+                    while time.time() - start_t < min(seconds, 2.5):
+                        try:
+                            r = client.get(f"{self.base_url}/api/mic")
+                            if r.status_code == 200 and len(r.content) > 0:
+                                pcm_chunks.append(r.content)
+                        except Exception:
+                            break
+                    if pcm_chunks:
+                        raw_pcm = b"".join(pcm_chunks)
+                        return self._create_wav(raw_pcm, sample_rate=16000, channels=1, bits_per_sample=16)
         except Exception as e:
             logger.warning(f"Failed to fetch mic audio from ESP32: {e}")
         return None
+
+    @staticmethod
+    def _create_wav(pcm_data: bytes, sample_rate: int = 16000, channels: int = 1, bits_per_sample: int = 16) -> bytes:
+        import struct
+        data_size = len(pcm_data)
+        riff_size = 36 + data_size
+        byte_rate = sample_rate * channels * (bits_per_sample // 8)
+        block_align = channels * (bits_per_sample // 8)
+        header = struct.pack(
+            '<4sI4s4sIHHIIHH4sI',
+            b'RIFF', riff_size, b'WAVE',
+            b'fmt ', 16, 1, channels, sample_rate, byte_rate, block_align, bits_per_sample,
+            b'data', data_size
+        )
+        return header + pcm_data
 
 
 esp32_client = ESP32Client()

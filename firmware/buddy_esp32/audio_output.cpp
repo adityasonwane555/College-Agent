@@ -99,31 +99,33 @@ size_t AudioOutput::writePcm(const int16_t* samples, size_t sampleCount) {
     return 0;
   }
 
-  // Allocate a stereo interleaved buffer on the stack / heap
-  // MAX98357A consumes standard stereo I2S frames (duplicate mono sample to Left & Right)
-  size_t stereoSamples = sampleCount * 2;
-  int16_t* stereoBuf = (int16_t*)malloc(stereoSamples * sizeof(int16_t));
-  if (!stereoBuf) {
-    return 0;
+  // Interleave mono into stereo frames in small chunks (stack-allocated)
+  // MAX98357A consumes standard stereo I2S frames (duplicate mono to Left & Right)
+  const size_t chunkSize = 256;
+  int16_t stereoChunk[chunkSize * 2];
+  size_t totalSamplesWritten = 0;
+
+  for (size_t i = 0; i < sampleCount; i += chunkSize) {
+    size_t count = (sampleCount - i < chunkSize) ? (sampleCount - i) : chunkSize;
+    for (size_t c = 0; c < count; c++) {
+      int16_t val = (int16_t)(samples[i + c] * _volume);
+      stereoChunk[c * 2]     = val; // Left
+      stereoChunk[c * 2 + 1] = val; // Right
+    }
+    size_t bytesWritten = 0;
+    esp_err_t err = i2s_write(
+      I2S_NUM_1,
+      (const void*)stereoChunk,
+      count * 2 * sizeof(int16_t),
+      &bytesWritten,
+      pdMS_TO_TICKS(150)
+    );
+    if (err == ESP_OK) {
+      totalSamplesWritten += (bytesWritten / (sizeof(int16_t) * 2));
+    }
   }
 
-  for (size_t i = 0; i < sampleCount; i++) {
-    int16_t scaled = (int16_t)(samples[i] * _volume);
-    stereoBuf[i * 2]     = scaled; // Left
-    stereoBuf[i * 2 + 1] = scaled; // Right
-  }
-
-  size_t bytesWritten = 0;
-  i2s_write(
-    I2S_NUM_1,
-    (const void*)stereoBuf,
-    stereoSamples * sizeof(int16_t),
-    &bytesWritten,
-    pdMS_TO_TICKS(100)
-  );
-
-  free(stereoBuf);
-  return bytesWritten / (sizeof(int16_t) * 2);
+  return totalSamplesWritten;
 }
 
 void AudioOutput::playChime() {

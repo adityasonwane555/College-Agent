@@ -9,13 +9,14 @@ client = TestClient(app)
 def test_state_normalization():
     controller = RGBController(enabled=False)
 
-    for state in VALID_STATES:
+    for state in ["BOOTING", "IDLE", "LISTENING", "THINKING", "SPEAKING", "ERROR"]:
         assert controller.normalize_state(state.lower()) == state
         assert controller.normalize_state(f"  {state}  ") == state
 
-    # Synonyms
-    assert controller.normalize_state("COMPLETED_SPEECH") == "COMPLETED"
-    assert controller.normalize_state("done") == "COMPLETED"
+    # Synonyms and transitions that map to IDLE
+    assert controller.normalize_state("COMPLETED_SPEECH") == "IDLE"
+    assert controller.normalize_state("COMPLETED") == "IDLE"
+    assert controller.normalize_state("done") == "IDLE"
 
     # Invalid states
     with pytest.raises(ValueError):

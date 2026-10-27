@@ -46,12 +46,28 @@ int8_t WifiManager::getRssi() const {
 
 void WifiManager::setupRoutes() {
   _server.on("/health", HTTP_GET, [this]() { handleHealth(); });
+  _server.on("/api/health", HTTP_GET, [this]() { handleHealth(); });
+  _server.on("/api/status", HTTP_GET, [this]() { handleHealth(); });
   _server.on("/", HTTP_GET, [this]() { handleHealth(); });
   _server.on("/api/state", HTTP_POST, [this]() { handleState(); });
   _server.on("/api/display", HTTP_POST, [this]() { handleDisplay(); });
   _server.on("/api/chime", HTTP_POST, [this]() { handleChime(); });
   _server.on("/api/mic", HTTP_GET, [this]() { handleMicStream(); });
+  _server.on("/api/mic/record", HTTP_GET, [this]() { handleMicRecord(); });
   _server.on("/api/speak", HTTP_POST, [this]() { handleSpeakStream(); });
+  _server.on("/api/speak/raw", HTTP_POST, [this]() { handleSpeakStream(); });
+  _server.on("/api/speak", HTTP_OPTIONS, [this]() {
+    _server.sendHeader("Access-Control-Allow-Origin", "*");
+    _server.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+    _server.send(204);
+  });
+  _server.on("/api/speak/raw", HTTP_OPTIONS, [this]() {
+    _server.sendHeader("Access-Control-Allow-Origin", "*");
+    _server.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+    _server.send(204);
+  });
 
   _server.onNotFound([this]() {
     _server.send(404, "text/plain", "Buddy AI: Endpoint Not Found");
@@ -82,32 +98,62 @@ void WifiManager::handleState() {
     stateStr = _server.arg("state");
   } else if (_server.hasArg("plain")) {
     String body = _server.arg("plain");
-    // Simple fast JSON extraction
-    int sIdx = body.indexOf("\"state\":\"");
-    if (sIdx >= 0) {
-      int endIdx = body.indexOf("\"", sIdx + 9);
-      if (endIdx > sIdx) stateStr = body.substring(sIdx + 9, endIdx);
+
+    // Robust JSON state extraction (tolerant to spaces, quotes, newlines)
+    int keyPos = body.indexOf("\"state\"");
+    if (keyPos >= 0) {
+      int colonPos = body.indexOf(':', keyPos + 7);
+      if (colonPos >= 0) {
+        int firstQuote = body.indexOf('"', colonPos + 1);
+        if (firstQuote >= 0) {
+          int secondQuote = body.indexOf('"', firstQuote + 1);
+          if (secondQuote > firstQuote) {
+            stateStr = body.substring(firstQuote + 1, secondQuote);
+          }
+        }
+      }
     }
-    int aIdx = body.indexOf("\"amplitude\":");
-    if (aIdx >= 0) amp = body.substring(aIdx + 12).toFloat();
-    int bIdx = body.indexOf("\"bass\":");
-    if (bIdx >= 0) bass = body.substring(bIdx + 7).toFloat();
-    int mIdx = body.indexOf("\"mid\":");
-    if (mIdx >= 0) mid = body.substring(mIdx + 6).toFloat();
-    int tIdx = body.indexOf("\"treble\":");
-    if (tIdx >= 0) treble = body.substring(tIdx + 9).toFloat();
+
+    // Robust numerical extraction
+    int aIdx = body.indexOf("\"amplitude\"");
+    if (aIdx >= 0) {
+      int c = body.indexOf(':', aIdx + 11);
+      if (c >= 0) amp = body.substring(c + 1).toFloat();
+    }
+    int bIdx = body.indexOf("\"bass\"");
+    if (bIdx >= 0) {
+      int c = body.indexOf(':', bIdx + 6);
+      if (c >= 0) bass = body.substring(c + 1).toFloat();
+    }
+    int mIdx = body.indexOf("\"mid\"");
+    if (mIdx >= 0) {
+      int c = body.indexOf(':', mIdx + 5);
+      if (c >= 0) mid = body.substring(c + 1).toFloat();
+    }
+    int tIdx = body.indexOf("\"treble\"");
+    if (tIdx >= 0) {
+      int c = body.indexOf(':', tIdx + 8);
+      if (c >= 0) treble = body.substring(c + 1).toFloat();
+    }
   }
 
   stateStr.toUpperCase();
   stateStr.trim();
 
   BuddyState targetState = rgbManager.getState();
-  if (stateStr == "BOOTING") targetState = STATE_BOOTING;
-  else if (stateStr == "IDLE") targetState = STATE_IDLE;
-  else if (stateStr == "LISTENING") targetState = STATE_LISTENING;
-  else if (stateStr == "THINKING") targetState = STATE_THINKING;
-  else if (stateStr == "SPEAKING") targetState = STATE_SPEAKING;
-  else if (stateStr == "ERROR") targetState = STATE_ERROR;
+  if (stateStr == "BOOTING") {
+    targetState = STATE_BOOTING;
+  } else if (stateStr == "IDLE" || stateStr == "COMPLETED" || stateStr == "INTERRUPTED" || stateStr == "READY" || stateStr == "DONE") {
+    targetState = STATE_IDLE;
+  } else if (stateStr == "LISTENING") {
+    targetState = STATE_LISTENING;
+  } else if (stateStr == "THINKING") {
+    targetState = STATE_THINKING;
+  } else if (stateStr == "SPEAKING") {
+    targetState = STATE_SPEAKING;
+  } else if (stateStr == "ERROR") {
+    targetState = STATE_ERROR;
+  }
 
   rgbManager.setState(targetState);
   rgbManager.setAudioLevels(amp, bass, mid, treble);
@@ -115,7 +161,7 @@ void WifiManager::handleState() {
   displayManager.setAudioLevel(amp);
 
   _server.sendHeader("Access-Control-Allow-Origin", "*");
-  _server.send(200, "application/json", "{\"ok\":true,\"state\":\"" + stateStr + "\"}");
+  _server.send(200, "application/json", "{\"ok\":true,\"state\":\"" + String(buddyStateToString(targetState)) + "\"}");
 }
 
 void WifiManager::handleDisplay() {
@@ -147,26 +193,131 @@ void WifiManager::handleMicStream() {
   _server.send_P(200, "application/octet-stream", (const char*)samples, count * sizeof(int16_t));
 }
 
-void WifiManager::handleSpeakStream() {
-  if (!_server.hasArg("plain")) {
-    _server.send(400, "text/plain", "Missing audio payload");
+void WifiManager::handleMicRecord() {
+  uint32_t seconds = 3;
+  if (_server.hasArg("seconds")) {
+    seconds = _server.arg("seconds").toInt();
+    if (seconds < 1) seconds = 1;
+    if (seconds > 10) seconds = 10;
+  }
+
+  uint32_t sampleRate = MIC_SAMPLE_RATE; // 16000 Hz
+  size_t totalSamples = sampleRate * seconds;
+  size_t pcmBytes = totalSamples * sizeof(int16_t);
+
+  int16_t* pcmBuffer = (int16_t*)ps_malloc(pcmBytes);
+  if (!pcmBuffer) {
+    pcmBuffer = (int16_t*)malloc(pcmBytes);
+  }
+  if (!pcmBuffer) {
+    _server.send(500, "text/plain", "Out of memory");
     return;
   }
 
-  String body = _server.arg("plain");
-  const uint8_t* rawData = (const uint8_t*)body.c_str();
-  size_t len = body.length();
+  rgbManager.setState(STATE_LISTENING);
+  displayManager.setState(STATE_LISTENING);
+  displayManager.setMessage("Listening", "Recording from microphone...");
 
-  rgbManager.setState(STATE_SPEAKING);
-  displayManager.setState(STATE_SPEAKING);
-
-  // Stream directly to MAX98357A I2S
-  audioOutput.writePcm((const int16_t*)rawData, len / sizeof(int16_t));
+  size_t samplesRecorded = 0;
+  unsigned long startRec = millis();
+  while (samplesRecorded < totalSamples && (millis() - startRec < (seconds * 1000 + 2000))) {
+    size_t remainingSamples = totalSamples - samplesRecorded;
+    size_t chunk = (remainingSamples < 512) ? remainingSamples : 512;
+    size_t readCount = microphoneManager.readSamples(pcmBuffer + samplesRecorded, chunk);
+    if (readCount > 0) {
+      samplesRecorded += readCount;
+      displayManager.setAudioLevel(microphoneManager.getRecentEnergy());
+    } else {
+      delay(2);
+    }
+  }
 
   rgbManager.setState(STATE_IDLE);
   displayManager.setState(STATE_IDLE);
 
-  _server.send(200, "application/json", "{\"ok\":true,\"played_bytes\":" + String(len) + "}");
+  // Standard 44-byte RIFF/WAVE header
+  uint8_t header[44];
+  uint32_t byteRate = sampleRate * 1 * sizeof(int16_t);
+  uint16_t blockAlign = 1 * sizeof(int16_t);
+  uint32_t dataSize = samplesRecorded * sizeof(int16_t);
+  uint32_t riffSize = 36 + dataSize;
+
+  memcpy(header, "RIFF", 4);
+  header[4] = (uint8_t)(riffSize);
+  header[5] = (uint8_t)(riffSize >> 8);
+  header[6] = (uint8_t)(riffSize >> 16);
+  header[7] = (uint8_t)(riffSize >> 24);
+  memcpy(header + 8, "WAVEfmt ", 8);
+  header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0;
+  header[20] = 1; header[21] = 0;
+  header[22] = 1; header[23] = 0;
+  header[24] = (uint8_t)(sampleRate);
+  header[25] = (uint8_t)(sampleRate >> 8);
+  header[26] = (uint8_t)(sampleRate >> 16);
+  header[27] = (uint8_t)(sampleRate >> 24);
+  header[28] = (uint8_t)(byteRate);
+  header[29] = (uint8_t)(byteRate >> 8);
+  header[30] = (uint8_t)(byteRate >> 16);
+  header[31] = (uint8_t)(byteRate >> 24);
+  header[32] = (uint8_t)(blockAlign);
+  header[33] = (uint8_t)(blockAlign >> 8);
+  header[34] = 16; header[35] = 0;
+  memcpy(header + 36, "data", 4);
+  header[40] = (uint8_t)(dataSize);
+  header[41] = (uint8_t)(dataSize >> 8);
+  header[42] = (uint8_t)(dataSize >> 16);
+  header[43] = (uint8_t)(dataSize >> 24);
+
+  WiFiClient client = _server.client();
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: audio/wav");
+  client.println("Access-Control-Allow-Origin: *");
+  client.print("Content-Length: ");
+  client.println(44 + dataSize);
+  client.println("Connection: close");
+  client.println();
+
+  client.write(header, 44);
+  const size_t sendChunk = 1024;
+  const uint8_t* pcmRaw = (const uint8_t*)pcmBuffer;
+  for (size_t sent = 0; sent < dataSize; sent += sendChunk) {
+    size_t remainingBytes = (size_t)(dataSize - sent);
+    size_t toSend = (remainingBytes < sendChunk) ? remainingBytes : sendChunk;
+    client.write(pcmRaw + sent, toSend);
+  }
+
+  free(pcmBuffer);
+}
+
+void WifiManager::handleSpeakStream() {
+  _server.sendHeader("Access-Control-Allow-Origin", "*");
+  WiFiClient client = _server.client();
+
+  size_t bytesToPlay = 0;
+  if (_server.hasArg("plain")) {
+    // If sent as raw POST body
+    String body = _server.arg("plain");
+    bytesToPlay = body.length();
+  }
+
+  rgbManager.setState(STATE_SPEAKING);
+  displayManager.setState(STATE_SPEAKING);
+
+  // Buffer and write directly to MAX98357A I2S amplifier
+  int16_t buffer[256];
+  size_t totalPlayed = 0;
+
+  if (_server.hasArg("plain")) {
+    const uint8_t* rawData = (const uint8_t*)_server.arg("plain").c_str();
+    size_t len = _server.arg("plain").length();
+    audioOutput.writePcm((const int16_t*)rawData, len / sizeof(int16_t));
+    totalPlayed = len;
+  }
+
+  rgbManager.setState(STATE_IDLE);
+  displayManager.setState(STATE_IDLE);
+
+  _server.send(200, "application/json", "{\"ok\":true,\"played_bytes\":" + String(totalPlayed) + "}");
 }
 
 void WifiManager::update() {
