@@ -63,6 +63,16 @@ export const api = {
     return res.json();
   },
 
+  async recordEsp32Mic(seconds: number = 4): Promise<{ success: boolean; text: string; error?: string }> {
+    const res = await fetch(`${API_BASE}/voice/record-esp32?seconds=${seconds}`, {
+      method: 'POST'
+    });
+    if (!res.ok) {
+      throw new Error(`ESP32 mic recording failed (${res.status})`);
+    }
+    return res.json();
+  },
+
   async synthesizeSpeech(text: string) {
     const res = await fetch(`${API_BASE}/voice/speak`, {
       method: 'POST',

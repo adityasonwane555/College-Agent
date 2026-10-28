@@ -215,8 +215,16 @@
   box-shadow: 0 0 25px #38bdf8;
 }
 
+/* SPEAKING (Vibrant Magenta Eyes) */
+.robot-head-wrapper.speaking .robot-eye,
+.eye-state-speaking .robot-eye {
+  background: #e879f9;
+  box-shadow: 0 0 25px #e879f9, 0 0 45px rgba(232, 121, 249, 0.6);
+}
+
 /* ERROR (Sympathetic Soft Amber/Red) */
-.robot-head-wrapper.error .robot-eye {
+.robot-head-wrapper.error .robot-eye,
+.eye-state-error .robot-eye {
   background: #f87171;
   box-shadow: 0 0 25px #f87171;
   height: 60px;
@@ -267,7 +275,10 @@
 }
 
 /* Speaking mouth oscillation */
-.robot-head-wrapper.speaking .robot-mouth-line {
+.robot-head-wrapper.speaking .robot-mouth-line,
+.robot-mouth-line.state-speaking {
+  background: #e879f9;
+  box-shadow: 0 0 18px #e879f9;
   animation: speaking-mouth 0.28s ease-in-out infinite alternate;
 }
 

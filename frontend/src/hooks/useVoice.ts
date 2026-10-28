@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { api, API_HOST } from '../services/api';
+import type { RobotState } from '../types';
 
 interface UseVoiceOptions {
   onTranscriptionComplete: (text: string) => void;
-  onStateChange: (state: 'listening' | 'speaking' | 'idle' | 'error') => void;
+  onStateChange: (state: RobotState) => void;
   onError: (errMessage: string) => void;
 }
 
@@ -11,11 +12,28 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [audioInputSource, setAudioInputSourceState] = useState<'robot' | 'laptop'>(() => {
+    return (localStorage.getItem('buddy_audio_input_source') as 'robot' | 'laptop') || 'robot';
+  });
   const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedInputDeviceId, setSelectedInputDeviceId] = useState<string>(() => {
     return localStorage.getItem('buddy_audio_input_id') || 'default';
   });
-  const [activeMicLabel, setActiveMicLabel] = useState<string>('Default Microphone');
+  const [activeMicLabel, setActiveMicLabel] = useState<string>(() => {
+    const savedSource = (localStorage.getItem('buddy_audio_input_source') as 'robot' | 'laptop') || 'robot';
+    return savedSource === 'robot' ? 'Robot Mic (ESP32 INMP441)' : 'Default Microphone';
+  });
+
+  const setAudioInputSource = useCallback((source: 'robot' | 'laptop') => {
+    setAudioInputSourceState(source);
+    localStorage.setItem('buddy_audio_input_source', source);
+    if (source === 'robot') {
+      setActiveMicLabel('Robot Mic (ESP32 INMP441)');
+    } else {
+      setActiveMicLabel('Default Microphone');
+    }
+  }, []);
+
   const [audioOutputTarget, setAudioOutputTargetState] = useState<'robot' | 'laptop' | 'both'>(() => {
     const saved = localStorage.getItem('buddy_audio_output_target');
     if (!saved || saved === 'robot') {
@@ -118,6 +136,9 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const speechHeartbeatRef = useRef<number | null>(null);
   const eqIntervalRef = useRef<number | null>(null);
+  const audioSafetyTimerRef = useRef<number | null>(null);
+  const chunkWatchdogRef = useRef<number | null>(null);
+  const speechWatchdogRef = useRef<number | null>(null);
 
   // Stop current speech playback
   const stopSpeaking = useCallback(() => {
@@ -129,7 +150,20 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       clearInterval(speechHeartbeatRef.current);
       speechHeartbeatRef.current = null;
     }
+    if (audioSafetyTimerRef.current) {
+      clearTimeout(audioSafetyTimerRef.current);
+      audioSafetyTimerRef.current = null;
+    }
+    if (chunkWatchdogRef.current) {
+      clearTimeout(chunkWatchdogRef.current);
+      chunkWatchdogRef.current = null;
+    }
+    if (speechWatchdogRef.current) {
+      clearTimeout(speechWatchdogRef.current);
+      speechWatchdogRef.current = null;
+    }
     activeUtterancesRef.current = [];
+    (window as any).__buddy_active_utterance = null;
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
@@ -150,6 +184,14 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     if (speechHeartbeatRef.current) {
       clearInterval(speechHeartbeatRef.current);
       speechHeartbeatRef.current = null;
+    }
+    if (chunkWatchdogRef.current) {
+      clearTimeout(chunkWatchdogRef.current);
+      chunkWatchdogRef.current = null;
+    }
+    if (speechWatchdogRef.current) {
+      clearTimeout(speechWatchdogRef.current);
+      speechWatchdogRef.current = null;
     }
 
     let cleanText = text
@@ -210,18 +252,45 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
-    }, 4000);
+    }, 3000);
+
+    const finishSpeech = () => {
+      if (speechHeartbeatRef.current) {
+        clearInterval(speechHeartbeatRef.current);
+        speechHeartbeatRef.current = null;
+      }
+      if (chunkWatchdogRef.current) {
+        clearTimeout(chunkWatchdogRef.current);
+        chunkWatchdogRef.current = null;
+      }
+      if (speechWatchdogRef.current) {
+        clearTimeout(speechWatchdogRef.current);
+        speechWatchdogRef.current = null;
+      }
+      activeUtterancesRef.current = [];
+      (window as any).__buddy_active_utterance = null;
+      setIsSpeaking(false);
+      // Clean, smiling transition before returning to idle
+      onStateChange('happy');
+      api.setLedState('IDLE');
+      setTimeout(() => {
+        onStateChange('idle');
+      }, 1800);
+    };
+
+    // Overall speech safety timer (prevents speech hanging indefinitely under any circumstance)
+    const overallSafetyMs = Math.max(cleanText.length * 100, 4500) + 4000;
+    speechWatchdogRef.current = window.setTimeout(() => {
+      if (!isCanceled) {
+        console.warn("[Browser Speech] Overall speech safety timer triggered, safely finishing.");
+        isCanceled = true;
+        finishSpeech();
+      }
+    }, overallSafetyMs);
 
     const speakChunk = (idx: number) => {
       if (isCanceled || idx >= sentences.length) {
-        if (speechHeartbeatRef.current) {
-          clearInterval(speechHeartbeatRef.current);
-          speechHeartbeatRef.current = null;
-        }
-        activeUtterancesRef.current = [];
-        setIsSpeaking(false);
-        onStateChange('idle');
-        api.setLedState('IDLE');
+        finishSpeech();
         return;
       }
 
@@ -232,9 +301,28 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         utterance.voice = voiceToUse;
       }
 
+      // Pin utterance to global object to prevent Chromium V8 GC from dropping onend event
+      (window as any).__buddy_active_utterance = utterance;
       activeUtterancesRef.current.push(utterance);
 
+      // Per-chunk watchdog: if Chrome drops onend, automatically advance
+      const chunkTimeoutMs = Math.max(sentences[idx].length * 95, 2500) + 2000;
+      if (chunkWatchdogRef.current) {
+        clearTimeout(chunkWatchdogRef.current);
+      }
+      chunkWatchdogRef.current = window.setTimeout(() => {
+        console.warn(`[Browser Speech] Watchdog timeout for chunk ${idx}, auto-advancing.`);
+        if (!isCanceled) {
+          currentIndex++;
+          speakChunk(currentIndex);
+        }
+      }, chunkTimeoutMs);
+
       utterance.onend = () => {
+        if (chunkWatchdogRef.current) {
+          clearTimeout(chunkWatchdogRef.current);
+          chunkWatchdogRef.current = null;
+        }
         if (!isCanceled) {
           currentIndex++;
           speakChunk(currentIndex);
@@ -243,6 +331,10 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
 
       utterance.onerror = (e) => {
         console.warn("[Browser Speech] Chunk speech error:", e);
+        if (chunkWatchdogRef.current) {
+          clearTimeout(chunkWatchdogRef.current);
+          chunkWatchdogRef.current = null;
+        }
         if (!isCanceled) {
           currentIndex++;
           speakChunk(currentIndex);
@@ -258,11 +350,50 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     }, 50);
   }, [onStateChange]);
 
+  const isEsp32RecordingRef = useRef(false);
+
   // Start Push-To-Talk Recording
   const startRecording = useCallback(async () => {
     // Stop any ongoing playback
     stopSpeaking();
 
+    // Robot Mic (ESP32 INMP441 I2S Digital Mic over Wi-Fi)
+    if (audioInputSource === 'robot') {
+      if (isEsp32RecordingRef.current) return;
+      isEsp32RecordingRef.current = true;
+      setIsRecording(true);
+      onStateChange('listening');
+      api.setLedState('LISTENING');
+
+      try {
+        console.log("[useVoice] Capturing audio from ESP32 INMP441 microphone over Wi-Fi (4s)...");
+        const result = await api.recordEsp32Mic(4);
+        isEsp32RecordingRef.current = false;
+        setIsRecording(false);
+
+        if (result.success && result.text && result.text.trim().length > 0) {
+          console.log("[useVoice] ESP32 mic transcription received:", result.text);
+          onStateChange('thinking');
+          api.setLedState('THINKING');
+          onTranscriptionComplete(result.text.trim());
+        } else {
+          console.warn("[useVoice] No speech detected from robot mic:", result);
+          onError(result.error || "No speech detected from robot microphone. Please speak clearly towards the robot's microphone.");
+          onStateChange('idle');
+          api.setLedState('IDLE');
+        }
+      } catch (err: any) {
+        isEsp32RecordingRef.current = false;
+        setIsRecording(false);
+        console.error("[useVoice] ESP32 mic recording error:", err);
+        onError(`Robot Mic Error: ${err.message || 'Failed to capture audio from robot microphone'}. Check that ESP32 is online.`);
+        onStateChange('error');
+        api.setLedState('ERROR');
+      }
+      return;
+    }
+
+    // Laptop WebRTC Microphone Fallback
     try {
       const savedMicId = localStorage.getItem('buddy_audio_input_id') || selectedInputDeviceId;
       const audioConstraints: MediaTrackConstraints = (savedMicId && savedMicId !== 'default')
@@ -359,19 +490,58 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         onError(`Microphone error: ${err.message || err.name}`);
       }
     }
-  }, [onStateChange, onTranscriptionComplete, onError, stopSpeaking, selectedInputDeviceId, refreshAudioDevices]);
+  }, [audioInputSource, onStateChange, onTranscriptionComplete, onError, stopSpeaking, selectedInputDeviceId, refreshAudioDevices]);
 
   // Stop Recording
   const stopRecording = useCallback(() => {
+    if (audioInputSource === 'robot') {
+      // Timed clip from ESP32 finishes automatically
+      return;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
-  }, []);
+  }, [audioInputSource]);
 
   // Play assistant voice
   const speak = useCallback(async (text: string, audioUrl?: string) => {
     if (isMuted) return;
-    stopSpeaking();
+
+    // Stop and clear previous playback without dropping to IDLE state
+    if (eqIntervalRef.current) {
+      clearInterval(eqIntervalRef.current);
+      eqIntervalRef.current = null;
+    }
+    if (speechHeartbeatRef.current) {
+      clearInterval(speechHeartbeatRef.current);
+      speechHeartbeatRef.current = null;
+    }
+    if (audioSafetyTimerRef.current) {
+      clearTimeout(audioSafetyTimerRef.current);
+      audioSafetyTimerRef.current = null;
+    }
+    if (chunkWatchdogRef.current) {
+      clearTimeout(chunkWatchdogRef.current);
+      chunkWatchdogRef.current = null;
+    }
+    if (speechWatchdogRef.current) {
+      clearTimeout(speechWatchdogRef.current);
+      speechWatchdogRef.current = null;
+    }
+    activeUtterancesRef.current = [];
+    (window as any).__buddy_active_utterance = null;
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    // Immediately enter SPEAKING state on UI face and hardware LED
+    setIsSpeaking(true);
+    onStateChange('speaking');
+    api.setLedState('SPEAKING', 0.8);
 
     // Helper to play WAV/MP3 audio element
     const playAudioUrl = async (url: string) => {
@@ -393,27 +563,58 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       }
       currentAudioRef.current = audio;
 
-      // Audio playback start: Transition hardware to SPEAKING state
+      // Audio playback start: Confirm and sustain SPEAKING state
       audio.onplay = () => {
         setIsSpeaking(true);
         onStateChange('speaking');
         api.setLedState('SPEAKING', 0.8);
+
+        // Safety watchdog: ensure state resets if audio element stalls or onended drops
+        const durationSec = (audio.duration && !isNaN(audio.duration) && audio.duration > 0)
+          ? audio.duration
+          : Math.max(text.length * 0.09, 3.5);
+        const safetyMs = (durationSec * 1000) + 3000;
+
+        if (audioSafetyTimerRef.current) {
+          clearTimeout(audioSafetyTimerRef.current);
+        }
+        audioSafetyTimerRef.current = window.setTimeout(() => {
+          if (currentAudioRef.current === audio) {
+            console.warn("[Voice] Audio safety watchdog fired, gracefully transitioning to idle.");
+            currentAudioRef.current = null;
+            setIsSpeaking(false);
+            onStateChange('happy');
+            api.setLedState('IDLE');
+            setTimeout(() => onStateChange('idle'), 1800);
+          }
+        }, safetyMs);
       };
 
-      // Audio playback completion: Transition hardware to IDLE immediately
+      // Audio playback completion: Transition hardware to IDLE with cheerful happy smile
       audio.onended = () => {
+        if (audioSafetyTimerRef.current) {
+          clearTimeout(audioSafetyTimerRef.current);
+          audioSafetyTimerRef.current = null;
+        }
         if (eqIntervalRef.current) {
           clearInterval(eqIntervalRef.current);
           eqIntervalRef.current = null;
         }
         setIsSpeaking(false);
         currentAudioRef.current = null;
-        onStateChange('idle');
+        onStateChange('happy');
         api.setLedState('IDLE');
+        setTimeout(() => {
+          onStateChange('idle');
+        }, 1800);
       };
 
       audio.onerror = (e) => {
         console.warn("[Voice] Audio element failed to play, switching to browser speech:", e);
+        if (audioSafetyTimerRef.current) {
+          clearTimeout(audioSafetyTimerRef.current);
+          audioSafetyTimerRef.current = null;
+        }
         setIsSpeaking(false);
         onStateChange('idle');
         fallbackBrowserSpeech(text);
@@ -423,6 +624,10 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         await audio.play();
       } catch (err) {
         console.warn("[Voice] audio.play() rejected (autoplay policy), switching to browser speech:", err);
+        if (audioSafetyTimerRef.current) {
+          clearTimeout(audioSafetyTimerRef.current);
+          audioSafetyTimerRef.current = null;
+        }
         setIsSpeaking(false);
         onStateChange('idle');
         fallbackBrowserSpeech(text);
@@ -457,27 +662,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   }, [isMuted, stopSpeaking, onStateChange, fallbackBrowserSpeech]);
 
   const playInstantAcknowledgment = useCallback(() => {
-    if (isMuted || !('speechSynthesis' in window)) return;
-    api.setLedState('SPEAKING');
-    const fillers = [
-      "Looking into that for you!",
-      "Checking the college records...",
-      "One moment, let me find that!",
-      "Looking that up right now!"
-    ];
-    const phrase = fillers[Math.floor(Math.random() * fillers.length)];
-    const utterance = new SpeechSynthesisUtterance(phrase);
-    utterance.rate = 1.1;
-    utterance.pitch = 1.15;
-    if (lockedVoiceRef.current) {
-      utterance.voice = lockedVoiceRef.current;
-    }
-    utterance.onend = () => {
-      api.setLedState('THINKING');
-    };
-    window.speechSynthesis.resume();
-    window.speechSynthesis.speak(utterance);
-  }, [isMuted]);
+    // Disabled: Prevents premature SPEAKING LED overrides while AI orchestrator is thinking
+  }, []);
 
   return {
     isRecording,
@@ -495,6 +681,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     activeMicLabel,
     refreshAudioDevices,
     audioOutputTarget,
-    setAudioOutputTarget
+    setAudioOutputTarget,
+    audioInputSource,
+    setAudioInputSource
   };
 }
