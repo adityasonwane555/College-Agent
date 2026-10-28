@@ -102,6 +102,15 @@ export const api = {
     }
   },
 
+  async stopVoice(resetState: boolean = true): Promise<{ ok: boolean }> {
+    try {
+      const res = await fetch(`${API_BASE}/hardware/stop-voice?reset_state=${resetState}`, { method: 'POST' });
+      return res.json();
+    } catch {
+      return { ok: false };
+    }
+  },
+
   async getLedStatus(): Promise<{ ok: boolean; state?: string; is_connected?: boolean }> {
     try {
       const res = await fetch(`${API_BASE}/hardware/led-status`);

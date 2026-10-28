@@ -140,8 +140,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const chunkWatchdogRef = useRef<number | null>(null);
   const speechWatchdogRef = useRef<number | null>(null);
 
-  // Stop current speech playback
-  const stopSpeaking = useCallback(() => {
+  // Stop current speech playback (optionally preserving state for immediate transitions)
+  const stopSpeaking = useCallback((resetState: boolean = true) => {
     if (eqIntervalRef.current) {
       clearInterval(eqIntervalRef.current);
       eqIntervalRef.current = null;
@@ -172,8 +172,14 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
-    onStateChange('idle');
-    api.setLedState('IDLE');
+
+    // Immediately abort ESP32 hardware speaker playback
+    api.stopVoice(resetState);
+
+    if (resetState) {
+      onStateChange('idle');
+      api.setLedState('IDLE');
+    }
   }, [onStateChange]);
 
   // Multi-sentence chunked browser speech (prevents Chrome halting at periods/fullstops)
@@ -354,8 +360,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
 
   // Start Push-To-Talk Recording
   const startRecording = useCallback(async () => {
-    // Stop any ongoing playback
-    stopSpeaking();
+    // Stop any ongoing playback without dropping state to IDLE
+    stopSpeaking(false);
 
     // Robot Mic (ESP32 INMP441 I2S Digital Mic over Wi-Fi)
     if (audioInputSource === 'robot') {

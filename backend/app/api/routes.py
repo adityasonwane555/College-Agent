@@ -380,3 +380,13 @@ def trigger_hardware_chime():
 def get_esp32_health():
     """Queries the ESP32-S3 microcontroller directly over local Wi-Fi."""
     return esp32_client.check_health()
+
+
+@router.post("/hardware/stop-voice")
+def stop_hardware_voice(reset_state: bool = True):
+    """Immediately halts audio playback on ESP32 speaker and optionally resets display and LED to IDLE."""
+    if reset_state:
+        rgb_controller.set_state("IDLE")
+    esp_res = esp32_client.stop_speaker(reset_display=reset_state)
+    return {"ok": True, "esp32_stopped": esp_res}
+

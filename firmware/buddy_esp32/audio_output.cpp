@@ -82,10 +82,8 @@ bool AudioOutput::begin(uint32_t sampleRate) {
 
 void AudioOutput::stop() {
   if (_isInitialized) {
-    i2s_zero_dma_buffer(I2S_NUM_1);
-    i2s_driver_uninstall(I2S_NUM_1);
-    _isInitialized = false;
-    LOG_PRINTLN("[AMP] Driver stopped.");
+    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT);
+    LOG_PRINTLN("[AMP] Audio DMA buffer cleared (immediate silence).");
   }
 }
 

@@ -12,6 +12,7 @@ import time
 import httpx
 import wave
 import logging
+import threading
 from typing import Dict, Any, Optional
 from ..config import settings
 
@@ -28,6 +29,8 @@ class ESP32Client:
         self.timeout = timeout
         self.is_connected = False
         self.last_contact = 0.0
+        self._streaming_lock = threading.Lock()
+        self._active_stream_client: Optional[httpx.Client] = None
 
     def check_health(self) -> Dict[str, Any]:
         """Pings the ESP32 /health endpoint."""
@@ -117,7 +120,10 @@ class ESP32Client:
                 logger.warning("Decoded PCM audio buffer is empty.")
                 return False
 
-            with httpx.Client(timeout=25.0) as client:
+            client = httpx.Client(timeout=30.0)
+            with self._streaming_lock:
+                self._active_stream_client = client
+            try:
                 url = f"{self.base_url}/api/speak/raw"
                 resp = client.post(
                     url,
@@ -131,8 +137,35 @@ class ESP32Client:
                         headers={"Content-Type": "application/octet-stream"}
                     )
                 return resp.status_code == 200
+            finally:
+                with self._streaming_lock:
+                    if self._active_stream_client is client:
+                        self._active_stream_client = None
+                try:
+                    client.close()
+                except Exception:
+                    pass
         except Exception as e:
             logger.warning(f"Failed to stream audio to ESP32 speaker: {e}")
+            return False
+
+    def stop_speaker(self, reset_display: bool = True) -> bool:
+        """Immediately halts speech playback on ESP32 hardware and optionally resets display to IDLE."""
+        with self._streaming_lock:
+            if self._active_stream_client:
+                try:
+                    self._active_stream_client.close()
+                except Exception:
+                    pass
+                self._active_stream_client = None
+
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                query = "?idle=1" if reset_display else "?idle=0"
+                resp = client.post(f"{self.base_url}/api/stop{query}")
+                return resp.status_code == 200
+        except Exception as e:
+            logger.warning(f"Failed to send stop signal to ESP32: {e}")
             return False
 
     def fetch_mic_recording(self, seconds: int = 3) -> Optional[bytes]:

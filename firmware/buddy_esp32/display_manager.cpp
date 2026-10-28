@@ -114,6 +114,8 @@ void DisplayManager::setState(BuddyState state) {
     _currentState = state;
     _stateStartTime = millis();
     _lastEyeH = -1; // Force immediate eye redraw with new state color
+    _lastAnimUpdate = 0; // Force immediate redraw on the very next update() call
+    _mouthStateDrawn = (BuddyState)-1; // Force immediate mouth redraw on state change
   }
 }
 

@@ -103,7 +103,7 @@ export const App: React.FC = () => {
     if (!trimmed) return;
 
     setInputText('');
-    stopSpeaking();
+    stopSpeaking(false);
 
     const userMsg: ChatMessage = {
       id: 'usr_' + Date.now(),

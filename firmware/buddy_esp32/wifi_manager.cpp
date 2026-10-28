@@ -17,7 +17,8 @@ WifiManager::WifiManager()
     _ssid(WIFI_SSID_DEFAULT),
     _password(WIFI_PASS_DEFAULT),
     _lastReconnectAttempt(0),
-    _wasConnected(false) {}
+    _wasConnected(false),
+    _abortPlayback(false) {}
 
 void WifiManager::begin(const char* ssid, const char* password) {
   _ssid = ssid;
@@ -56,6 +57,13 @@ void WifiManager::setupRoutes() {
   _server.on("/api/mic/record", HTTP_GET, [this]() { handleMicRecord(); });
   _server.on("/api/speak", HTTP_POST, [this]() { handleSpeakEnd(); }, [this]() { handleSpeakRaw(); });
   _server.on("/api/speak/raw", HTTP_POST, [this]() { handleSpeakEnd(); }, [this]() { handleSpeakRaw(); });
+  _server.on("/api/stop", HTTP_POST, [this]() { handleStop(); });
+  _server.on("/api/stop", HTTP_OPTIONS, [this]() {
+    _server.sendHeader("Access-Control-Allow-Origin", "*");
+    _server.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    _server.sendHeader("Access-Control-Allow-Headers", "*");
+    _server.send(204);
+  });
   _server.on("/api/speak", HTTP_OPTIONS, [this]() {
     _server.sendHeader("Access-Control-Allow-Origin", "*");
     _server.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -159,6 +167,8 @@ void WifiManager::handleState() {
   rgbManager.setAudioLevels(amp, bass, mid, treble);
   displayManager.setState(targetState);
   displayManager.setAudioLevel(amp);
+  displayManager.update();
+  rgbManager.update();
 
   _server.sendHeader("Access-Control-Allow-Origin", "*");
   _server.send(200, "application/json", "{\"ok\":true,\"state\":\"" + String(buddyStateToString(targetState)) + "\"}");
@@ -216,10 +226,12 @@ void WifiManager::handleMicRecord() {
 
   rgbManager.setState(STATE_LISTENING);
   displayManager.setState(STATE_LISTENING);
-  displayManager.setMessage("Listening", "Recording from microphone...");
+  displayManager.update();
+  rgbManager.update();
 
   size_t samplesRecorded = 0;
   unsigned long startRec = millis();
+  unsigned long lastDisplayTick = 0;
   while (samplesRecorded < totalSamples && (millis() - startRec < (seconds * 1000 + 2000))) {
     size_t remainingSamples = totalSamples - samplesRecorded;
     size_t chunk = (remainingSamples < 512) ? remainingSamples : 512;
@@ -230,10 +242,21 @@ void WifiManager::handleMicRecord() {
     } else {
       delay(2);
     }
+
+    // Actively animate the robot face and RGB LED at 40 FPS while user is speaking
+    unsigned long now = millis();
+    if (now - lastDisplayTick >= 25) {
+      lastDisplayTick = now;
+      displayManager.update();
+      rgbManager.update();
+    }
   }
 
-  rgbManager.setState(STATE_IDLE);
-  displayManager.setState(STATE_IDLE);
+  // Smoothly transition directly to THINKING state while audio is sent and processed
+  rgbManager.setState(STATE_THINKING);
+  displayManager.setState(STATE_THINKING);
+  displayManager.update();
+  rgbManager.update();
 
   // Standard 44-byte RIFF/WAVE header
   uint8_t header[44];
@@ -292,12 +315,16 @@ void WifiManager::handleMicRecord() {
 void WifiManager::handleSpeakRaw() {
   HTTPRaw& raw = _server.raw();
   if (raw.status == RAW_START) {
+    _abortPlayback = false;
     LOG_PRINTLN("[Audio] Incoming speech stream started...");
     rgbManager.setState(STATE_SPEAKING);
     displayManager.setState(STATE_SPEAKING);
     displayManager.update();
     rgbManager.update();
   } else if (raw.status == RAW_WRITE) {
+    if (_abortPlayback) {
+      return; // Discard audio data if user interrupted speech
+    }
     if (raw.currentSize > 0) {
       const int16_t* samples = (const int16_t*)raw.buf;
       size_t count = raw.currentSize / sizeof(int16_t);
@@ -319,6 +346,13 @@ void WifiManager::handleSpeakRaw() {
       rgbManager.update();
     }
   } else if (raw.status == RAW_END) {
+    if (_abortPlayback) {
+      rgbManager.setState(STATE_IDLE);
+      displayManager.setState(STATE_IDLE);
+      displayManager.update();
+      rgbManager.update();
+      return;
+    }
     LOG_PRINTLN("[Audio] Speech stream completed. Draining I2S buffer...");
     // Keep mouth speaking and LED active while remaining DMA samples drain out of speaker
     unsigned long startDrain = millis();
@@ -335,12 +369,32 @@ void WifiManager::handleSpeakRaw() {
     LOG_PRINTLN("[Audio] Speech stream aborted.");
     rgbManager.setState(STATE_IDLE);
     displayManager.setState(STATE_IDLE);
+    displayManager.update();
+    rgbManager.update();
   }
 }
 
 void WifiManager::handleSpeakEnd() {
   _server.sendHeader("Access-Control-Allow-Origin", "*");
   _server.send(200, "application/json", "{\"ok\":true,\"message\":\"Playback finished\"}");
+}
+
+void WifiManager::handleStop() {
+  LOG_PRINTLN("[Control] Emergency Stop / Interrupt requested.");
+  _abortPlayback = true;
+  audioOutput.stop();
+  bool resetToIdle = true;
+  if (_server.hasArg("idle") && _server.arg("idle") == "0") {
+    resetToIdle = false;
+  }
+  if (resetToIdle) {
+    rgbManager.setState(STATE_IDLE);
+    displayManager.setState(STATE_IDLE);
+    displayManager.update();
+    rgbManager.update();
+  }
+  _server.sendHeader("Access-Control-Allow-Origin", "*");
+  _server.send(200, "application/json", "{\"ok\":true,\"stopped\":true}");
 }
 
 void WifiManager::update() {

@@ -37,6 +37,8 @@ private:
   void handleMicRecord();
   void handleSpeakRaw();
   void handleSpeakEnd();
+  void handleStop();
+  volatile bool _abortPlayback;
 };
 
 extern WifiManager wifiManager;
