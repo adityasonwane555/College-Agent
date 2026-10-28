@@ -53,10 +53,13 @@ class Settings(BaseSettings):
     STT_DEVICE: str = "cuda"
     STT_LANGUAGE: str = "en"
 
-    # Text to Speech (edge_tts for instant sub-second neural voice, fish_audio for local S2 Pro)
+    # Text to Speech (edge_tts, fish_audio_api, or local fish_audio)
     TTS_ENABLED: bool = True
-    TTS_ENGINE: str = "edge_tts"
+    TTS_ENGINE: str = "fish_audio_api"
     EDGE_TTS_VOICE: str = "en-US-AnaNeural"
+    FISH_AUDIO_API_KEY: str = ""
+    FISH_AUDIO_MODEL: str = "s2.1-pro-free"
+    FISH_AUDIO_REFERENCE_ID: str = ""
     FISH_TTS_SERVER_URL: str = "http://127.0.0.1:3030"
     FISH_TTS_DIR: str = str(WORKSPACE_DIR / "BUDDY-Fish-TTS")
     TTS_VOICE_PATH: str = ""

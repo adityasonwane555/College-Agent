@@ -36,6 +36,44 @@ def run_edge_tts_synthesis(text: str, out_file: Path, voice: str = "en-US-AnaNeu
         return False
 
 
+def run_fish_audio_api_synthesis(text: str, out_file: Path) -> bool:
+    """
+    Synthesizes speech using the Fish Audio Cloud API (https://api.fish.audio/v1/tts).
+    Uses the user's API key and model (s2.1-pro-free) to generate high-fidelity MP3.
+    """
+    api_key = getattr(settings, "FISH_AUDIO_API_KEY", "")
+    if not api_key:
+        print("[Fish Audio API] Error: FISH_AUDIO_API_KEY is not configured.")
+        return False
+
+    url = "https://api.fish.audio/v1/tts"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "model": getattr(settings, "FISH_AUDIO_MODEL", "s2.1-pro-free")
+    }
+    payload: Dict[str, Any] = {
+        "text": text,
+        "format": "mp3"
+    }
+    ref_id = getattr(settings, "FISH_AUDIO_REFERENCE_ID", "")
+    if ref_id:
+        payload["reference_id"] = ref_id
+
+    try:
+        with httpx.Client(timeout=45.0) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code == 200 and len(resp.content) > 500:
+                out_file.write_bytes(resp.content)
+                return True
+            else:
+                print(f"[Fish Audio API] HTTP {resp.status_code} Error: {resp.text[:200]}")
+                return False
+    except Exception as e:
+        print(f"[Fish Audio API] Connection error: {e}")
+        return False
+
+
 def is_fish_tts_server_alive() -> bool:
     """Checks if the persistent s2.cpp server is responding."""
     try:
@@ -192,7 +230,35 @@ def synthesize_speech(text: str) -> Dict[str, Any]:
             "message": "No speakable text found."
         }
 
-    # 1. Ultra-Fast High-Fidelity Edge-TTS Engine (Default, ~1.5s response, zero VRAM)
+    # 1. Fish Audio Cloud API Engine (s2.1-pro-free cloud model)
+    if getattr(settings, "TTS_ENGINE", "edge_tts") in ("fish_audio_api", "fish_audio_cloud"):
+        fish_filename = AUDIO_DIR / f"tts_{uuid.uuid4().hex[:8]}.mp3"
+        if run_fish_audio_api_synthesis(clean_text, fish_filename):
+            return {
+                "enabled": True,
+                "method": "fish_audio_api",
+                "audio_url": f"/api/voice/audio/{fish_filename.name}",
+                "file_path": str(fish_filename),
+                "text": clean_text
+            }
+        print("[Fish Audio API] Cloud request failed, attempting Edge-TTS fallback...")
+        edge_filename = AUDIO_DIR / f"tts_{uuid.uuid4().hex[:8]}.mp3"
+        voice_name = getattr(settings, "EDGE_TTS_VOICE", "en-US-AnaNeural")
+        if run_edge_tts_synthesis(clean_text, edge_filename, voice_name):
+            return {
+                "enabled": True,
+                "method": "edge_tts_fallback",
+                "audio_url": f"/api/voice/audio/{edge_filename.name}",
+                "file_path": str(edge_filename),
+                "text": clean_text
+            }
+        return {
+            "enabled": False,
+            "method": "fish_audio_failed",
+            "message": "Fish Audio API and Edge-TTS fallback both failed."
+        }
+
+    # 2. Ultra-Fast High-Fidelity Edge-TTS Engine (~1.5s response, zero VRAM)
     if getattr(settings, "TTS_ENGINE", "edge_tts") == "edge_tts":
         edge_filename = AUDIO_DIR / f"tts_{uuid.uuid4().hex[:8]}.mp3"
         voice_name = getattr(settings, "EDGE_TTS_VOICE", "en-US-AnaNeural")
