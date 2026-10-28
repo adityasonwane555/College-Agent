@@ -70,11 +70,23 @@ async def check_ollama_status() -> Dict[str, Any]:
         }
 
 
+def _word_in_text(word: str, text: str) -> bool:
+    """Checks if a whole word exists in text with regex word boundaries."""
+    return bool(re.search(r'\b' + re.escape(word) + r'\b', text, re.IGNORECASE))
+
+
+def _any_word_in_text(words: List[str], text: str) -> bool:
+    """Checks if any of the given words match as a whole word in text."""
+    pattern = r'\b(' + '|'.join(re.escape(w) for w in words) + r')\b'
+    return bool(re.search(pattern, text, re.IGNORECASE))
+
+
 def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
     Intelligent simulated reception agent for APCOER Pune used when Ollama or Gemini
     are momentarily busy or offline. Executes the exact same tool-calling contract as Ollama
     so all tools, citations, and states work with real institutional records.
+    Uses strict regex word boundaries to prevent false substring matches (e.g. 'it' in 'Adityo').
     """
     last_msg = messages[-1]
     last_role = last_msg.get("role")
@@ -90,31 +102,72 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # Extract user query
+    # Extract latest user query
     user_query = ""
     for m in reversed(messages):
         if m.get("role") == "user":
-            user_query = m.get("content", "").lower()
+            user_query = m.get("content", "").lower().strip()
             break
 
     # Look back at context for follow-ups (e.g. "which floor?", "where is it?")
     prev_user_queries = [m.get("content", "") for m in messages if m.get("role") == "user"]
     context_str = " ".join(prev_user_queries).lower()
 
-    # 1. College Identity & Name intent
-    if any(k in user_query for k in ["college name", "name of college", "our college", "which college", "what college", "what is this college", "apcoer", "who are you", "what is your name"]) or ("college" in user_query and "name" in user_query):
+    # 1. Self-Introduction Detection (e.g., "Hi, my name is Aditya", "I am Aditya")
+    intro_match = re.search(r'\b(?:my name is|i am|im|this is|call me)\s+([a-zA-Z]+)', user_query, re.IGNORECASE)
+    if intro_match:
+        candidate_name = intro_match.group(1).capitalize()
+        stop_words = {"looking", "interested", "trying", "here", "a", "an", "the", "just", "asking", "visiting", "calling", "student", "parent", "new"}
+        if candidate_name.lower() not in stop_words:
+            return {
+                "role": "assistant",
+                "content": (
+                    f"Hello {candidate_name}! It is a pleasure to meet you. I am Buddy, the AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune. "
+                    "How may I assist you today? Would you like directions to any department or details about our college?"
+                ),
+                "is_simulated": True
+            }
+
+    # 2. "Why is this college best" / Why Choose APCOER / College Highlights
+    why_best_tokens = [
+        "why is this college best", "why this college", "why apcoer", "why should i join",
+        "why choose this college", "why choose apcoer", "why should i choose", "what makes this college",
+        "is this college good", "best college", "college advantages", "speciality of college",
+        "features of college", "why study here", "benefits of this college"
+    ]
+    if any(t in user_query for t in why_best_tokens):
         return {
             "role": "assistant",
             "content": (
-                "Hello and welcome! Our college is Anantrao Pawar College of Engineering & Research (APCOER), Pune. "
-                "Our parent trust is Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad, founded in 1907 with the guiding motto 'Bahujan Hitay, Bahujan Sukhaya') and we are affiliated with Savitribai Phule Pune University (DTE Code: 6794). "
-                "I am Buddy, your AI Receptionist. How may I assist you today?"
+                "Anantrao Pawar College of Engineering & Research (APCOER), Pune stands out for several compelling reasons! "
+                "First, our legacy under Akhil Bharatiya Maratha Shikshan Parishad (ABMSP) spans over 117 years of educational excellence, founded in 1907 with the guiding motto 'Bahujan Hitay, Bahujan Sukhaya'. "
+                "Second, our 10-acre green campus at Parvati Hills features state-of-the-art infrastructure, including Advanced CAD/CAM, Robotics labs, and an active Technology Business Incubator (TBI). "
+                "Third, our placement cell achieves outstanding outcomes with premier recruiters like TCS, Infosys, Capgemini, L&T, Tech Mahindra, and Cognizant. "
+                "Would you like more details on a specific academic department or the admission process under DTE Code 6794?"
             ),
             "is_simulated": True
         }
 
-    # 1b. Institutional History & ABMSP Trust intent
-    if any(k in user_query for k in ["history", "founded", "founder", "trust", "abmsp", "parishad", "bahujan", "motto"]):
+    # 3. College Identity & Name intent
+    college_name_tokens = [
+        "who are you", "what is your name", "what are you", "tell me about yourself",
+        "what can you do", "which college", "what college", "what is this college", "college name",
+        "name of college", "what is the college name", "where am i", "about college",
+        "about apcoer", "our college", "name of our college", "our college name"
+    ]
+    if any(t in user_query for t in college_name_tokens) or ("college" in user_query and _word_in_text("name", user_query)):
+        return {
+            "role": "assistant",
+            "content": (
+                "Hello and welcome! I am Buddy, the official AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune. "
+                "Our parent trust is Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad, founded in 1907 with the guiding motto 'Bahujan Hitay, Bahujan Sukhaya') and we are affiliated with Savitribai Phule Pune University (DTE Code: 6794). "
+                "I am delighted to assist you with departments, faculty cabins, campus navigation, placements, and facilities. How can I assist you today?"
+            ),
+            "is_simulated": True
+        }
+
+    # 4. Institutional History & ABMSP Trust intent
+    if _any_word_in_text(["history", "founded", "founder", "trust", "abmsp", "parishad", "bahujan", "motto", "heritage"], user_query):
         return {
             "role": "assistant",
             "content": (
@@ -126,125 +179,133 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 2. Department intent
-    dept_matches = {
-        "computer": "Computer Engineering",
-        "comp": "Computer Engineering",
-        "cse": "Computer Engineering",
-        "artificial intelligence": "Artificial Intelligence and Data Science",
-        "ai": "Artificial Intelligence and Data Science",
-        "data science": "Artificial Intelligence and Data Science",
-        "information technology": "Information Technology",
-        "it": "Information Technology",
-        "mechanical": "Mechanical Engineering",
-        "mech": "Mechanical Engineering",
-        "civil": "Civil Engineering",
-        "electronics": "Electronics and Telecommunication Engineering",
-        "entc": "Electronics and Telecommunication Engineering",
-        "telecommunication": "Electronics and Telecommunication Engineering",
-        "mca": "Master of Computer Applications",
-        "first year": "First Year Engineering (Applied Science)",
-        "fe": "First Year Engineering (Applied Science)"
-    }
-    for k, v in dept_matches.items():
-        if k in user_query or (("which floor" in user_query or "where" in user_query) and k in context_str):
-            return {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [{
-                    "function": {
-                        "name": "get_department",
-                        "arguments": {"name": v}
-                    }
-                }],
-                "is_simulated": True
-            }
+    # 5. Department intent (STRICT whole-word matching to avoid false substring matches like 'it' in 'adityo')
+    has_dept_context = _any_word_in_text(["department", "dept", "branch", "engineering", "course", "hod", "lab", "faculty", "syllabus", "admission", "cutoff", "seats", "curriculum"], user_query)
+    dept_target = None
 
-    # 3. Faculty / Principal / Leadership intent
-    if any(k in user_query for k in ["faculty", "professor", "hod", "principal", "director", "vice principal", "tpo", "cabin", "consult"]):
-        name_search = "Dr. Sunil B. Thakare"
-        candidates = {
-            "principal": "Dr. Sunil B. Thakare",
-            "thakare": "Dr. Sunil B. Thakare",
-            "sunil": "Dr. Sunil B. Thakare",
-            "vice principal": "Prof. Shrikant B. Jagtap",
-            "jagtap": "Prof. Shrikant B. Jagtap",
-            "shrikant": "Prof. Shrikant B. Jagtap",
-            "gaikwad": "Dr. Rama B. Gaikwad",
-            "rama": "Dr. Rama B. Gaikwad",
-            "kadam": "Dr. Amit Ashokrao Kadam",
-            "amit": "Dr. Amit Ashokrao Kadam",
-            "rankhambe": "Prof. D. P. Rankhambe",
-            "devika": "Prof. D. P. Rankhambe",
-            "lavhe": "Prof. R. S. Lavhe",
-            "ramesh": "Prof. R. S. Lavhe",
-            "kokane": "Prof. S. R. Kokane",
-            "sayali": "Prof. S. R. Kokane",
-            "kalal": "Prof. A. N. Kalal",
-            "ashok": "Prof. A. N. Kalal",
-            "nikam": "Prof. Rajshri Nikam",
-            "rajshri": "Prof. Rajshri Nikam",
-            "dodke": "Prof. A. R. Dodke",
-            "akash": "Prof. A. R. Dodke",
-            "dipalee": "Prof. Dipalee Shah",
-            "shah": "Prof. Dipalee Shah",
-            "khaire": "Prof. Prajakta G. Khaire",
-            "prajakta": "Prof. Prajakta G. Khaire",
-            "khote": "Prof. Shital S. Khote",
-            "shital": "Prof. Shital S. Khote",
-            "patil": "Mr. Ajinkya Patil",
-            "ajinkya": "Mr. Ajinkya Patil",
-            "musale": "Dr. Jitendra Musale",
-            "jitendra": "Dr. Jitendra Musale",
-            "deshmukh": "Dr. Amar Deshmukh",
-            "amar": "Dr. Amar Deshmukh",
-            "sorate": "Dr. Raviraj Ramesh Sorate",
-            "raviraj": "Dr. Raviraj Ramesh Sorate",
-            "kamble": "Dr. Dattatray P. Kamble",
-            "dattatray": "Dr. Dattatray P. Kamble",
-            "newase": "Dr. Atul D. Newase",
-            "atul": "Dr. Atul D. Newase",
-            "selukar": "Dr. Balaji S. Selukar",
-            "balaji": "Dr. Balaji S. Selukar",
-            "totla": "Prof. Nilesh S. Totla",
-            "nilesh": "Prof. Nilesh S. Totla",
-            "tpo": "Prof. Nilesh S. Totla",
-            "placement": "Prof. Nilesh S. Totla"
+    if _word_in_text("computer", user_query) or _word_in_text("cse", user_query) or _word_in_text("comp", user_query):
+        dept_target = "Computer Engineering"
+    elif _word_in_text("artificial intelligence", user_query) or _word_in_text("aids", user_query) or "ai & ds" in user_query or _word_in_text("data science", user_query):
+        dept_target = "Artificial Intelligence and Data Science"
+    elif _word_in_text("ai", user_query) and (has_dept_context or "ds" in user_query):
+        dept_target = "Artificial Intelligence and Data Science"
+    elif _word_in_text("information technology", user_query):
+        dept_target = "Information Technology"
+    elif _word_in_text("it", user_query) and (has_dept_context or user_query.strip() in {"it", "it department", "about it", "about it dept"}):
+        dept_target = "Information Technology"
+    elif _word_in_text("mechanical", user_query) or (_word_in_text("mech", user_query) and has_dept_context):
+        dept_target = "Mechanical Engineering"
+    elif _word_in_text("civil", user_query):
+        dept_target = "Civil Engineering"
+    elif _any_word_in_text(["electronics", "entc", "etc", "telecommunication"], user_query):
+        dept_target = "Electronics and Telecommunication Engineering"
+    elif _word_in_text("mca", user_query):
+        dept_target = "Master of Computer Applications"
+    elif _word_in_text("first year", user_query) or (_word_in_text("fe", user_query) and has_dept_context):
+        dept_target = "First Year Engineering (Applied Science)"
+
+    if dept_target:
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "function": {
+                    "name": "get_department",
+                    "arguments": {"name": dept_target}
+                }
+            }],
+            "is_simulated": True
         }
-        for k, v in candidates.items():
-            if k in user_query:
-                name_search = v
-                break
+
+    # 6. Faculty / Principal / Leadership intent
+    has_faculty_kw = _any_word_in_text(["faculty", "professor", "professors", "hod", "principal", "director", "vice principal", "tpo", "cabin", "consult", "teacher", "teachers", "staff"], user_query)
+    candidates = {
+        "principal": "Dr. Sunil B. Thakare",
+        "thakare": "Dr. Sunil B. Thakare",
+        "sunil": "Dr. Sunil B. Thakare",
+        "vice principal": "Prof. Shrikant B. Jagtap",
+        "jagtap": "Prof. Shrikant B. Jagtap",
+        "shrikant": "Prof. Shrikant B. Jagtap",
+        "gaikwad": "Dr. Rama B. Gaikwad",
+        "rama": "Dr. Rama B. Gaikwad",
+        "kadam": "Dr. Amit Ashokrao Kadam",
+        "amit": "Dr. Amit Ashokrao Kadam",
+        "rankhambe": "Prof. D. P. Rankhambe",
+        "devika": "Prof. D. P. Rankhambe",
+        "lavhe": "Prof. R. S. Lavhe",
+        "ramesh": "Prof. R. S. Lavhe",
+        "kokane": "Prof. S. R. Kokane",
+        "sayali": "Prof. S. R. Kokane",
+        "kalal": "Prof. A. N. Kalal",
+        "ashok": "Prof. A. N. Kalal",
+        "nikam": "Prof. Rajshri Nikam",
+        "rajshri": "Prof. Rajshri Nikam",
+        "dodke": "Prof. A. R. Dodke",
+        "akash": "Prof. A. R. Dodke",
+        "dipalee": "Prof. Dipalee Shah",
+        "shah": "Prof. Dipalee Shah",
+        "khaire": "Prof. Prajakta G. Khaire",
+        "prajakta": "Prof. Prajakta G. Khaire",
+        "khote": "Prof. Shital S. Khote",
+        "shital": "Prof. Shital S. Khote",
+        "patil": "Mr. Ajinkya Patil",
+        "ajinkya": "Mr. Ajinkya Patil",
+        "musale": "Dr. Jitendra Musale",
+        "jitendra": "Dr. Jitendra Musale",
+        "deshmukh": "Dr. Amar Deshmukh",
+        "amar": "Dr. Amar Deshmukh",
+        "sorate": "Dr. Raviraj Ramesh Sorate",
+        "raviraj": "Dr. Raviraj Ramesh Sorate",
+        "kamble": "Dr. Dattatray P. Kamble",
+        "dattatray": "Dr. Dattatray P. Kamble",
+        "newase": "Dr. Atul D. Newase",
+        "atul": "Dr. Atul D. Newase",
+        "selukar": "Dr. Balaji S. Selukar",
+        "balaji": "Dr. Balaji S. Selukar",
+        "totla": "Prof. Nilesh S. Totla",
+        "nilesh": "Prof. Nilesh S. Totla",
+        "tpo": "Prof. Nilesh S. Totla",
+        "placement": "Prof. Nilesh S. Totla"
+    }
+
+    matched_faculty = None
+    for k, v in candidates.items():
+        if _word_in_text(k, user_query):
+            matched_faculty = v
+            break
+
+    if matched_faculty or has_faculty_kw:
+        target_name = matched_faculty or "Dr. Sunil B. Thakare"
         return {
             "role": "assistant",
             "content": "",
             "tool_calls": [{
                 "function": {
                     "name": "get_faculty",
-                    "arguments": {"name": name_search}
+                    "arguments": {"name": target_name}
                 }
             }],
             "is_simulated": True
         }
 
-    # 4. Room / Location intent
-    if any(k in user_query for k in ["room", "auditorium", "lab", "library", "office", "cabin", "where is", "tbi", "seminar"]):
+    # 7. Room / Location intent
+    if _any_word_in_text(["room", "auditorium", "lab", "library", "office", "cabin", "where is", "tbi", "seminar", "workshop", "canteen"], user_query):
         room_name = "Auditorium"
-        if "principal" in user_query or "101" in user_query:
+        if _word_in_text("principal", user_query) or "101" in user_query:
             room_name = "Principal Office (Room 101)"
-        elif "student" in user_query or "admin" in user_query or "admission" in user_query or "102" in user_query:
+        elif _any_word_in_text(["student", "admin", "admission"], user_query) or "102" in user_query:
             room_name = "Student Administrative Section (Room 102)"
-        elif "vice" in user_query or "103" in user_query:
+        elif _word_in_text("vice", user_query) or "103" in user_query:
             room_name = "Vice Principal Office (Room 103)"
-        elif "library" in user_query or "reading" in user_query:
+        elif _any_word_in_text(["library", "reading"], user_query):
             room_name = "Central Library & Digital Reading Hall (LIB-01)"
-        elif "tpo" in user_query or "placement" in user_query:
+        elif _any_word_in_text(["tpo", "placement"], user_query):
             room_name = "Training & Placement Cell (TPO-01)"
-        elif "tbi" in user_query or "incubator" in user_query or "startup" in user_query:
+        elif _any_word_in_text(["tbi", "incubator", "startup"], user_query):
             room_name = "Technology Business Incubator (TBI-01)"
-        elif "workshop" in user_query or "cnc" in user_query:
+        elif _any_word_in_text(["workshop", "cnc"], user_query):
             room_name = "Mechanical Workshop Complex (WS-01)"
-        elif "seminar" in user_query or "auditorium" in user_query:
+        elif _any_word_in_text(["seminar", "auditorium"], user_query):
             room_name = "Central Auditorium (AUD-01)"
         return {
             "role": "assistant",
@@ -258,8 +319,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 5. College Hours intent
-    if any(k in user_query for k in ["hour", "timing", "timings", "open", "close", "when does", "schedule"]):
+    # 8. College Hours intent
+    if _any_word_in_text(["hours", "timing", "timings", "opening", "closing", "schedule"], user_query):
         return {
             "role": "assistant",
             "content": "",
@@ -272,8 +333,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 6. Events intent
-    if any(k in user_query for k in ["event", "symposium", "sparktech", "technothon", "ashwamedh", "hackathon"]):
+    # 9. Events intent
+    if _any_word_in_text(["event", "events", "symposium", "sparktech", "technothon", "ashwamedh", "hackathon"], user_query):
         return {
             "role": "assistant",
             "content": "",
@@ -286,8 +347,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 7. Announcements intent
-    if any(k in user_query for k in ["announcement", "notice", "circular", "dte", "sppu", "exam"]):
+    # 10. Announcements intent
+    if _any_word_in_text(["announcement", "announcements", "notice", "notices", "circular", "circulars", "circular"], user_query):
         return {
             "role": "assistant",
             "content": "",
@@ -300,8 +361,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 8. Document search intent (prospectus, eligibility, admission rules, fees, scholarship, syllabus)
-    if any(k in user_query for k in ["eligibility", "prospectus", "scholarship", "anti-ragging", "ragging", "quota", "handbook", "parking", "visitor", "cap", "dte code", "syllabus", "curriculum", "cutoff"]):
+    # 11. Document search intent (prospectus, eligibility, admission rules, fees, scholarship, syllabus)
+    if _any_word_in_text(["eligibility", "prospectus", "scholarship", "ragging", "quota", "handbook", "parking", "cutoff", "cutoffs", "syllabus", "curriculum"], user_query):
         return {
             "role": "assistant",
             "content": "",
@@ -314,8 +375,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # 9. General FAQs (fees, admission, hostel, bonafide, id card)
-    if any(k in user_query for k in ["fee", "admission", "hostel", "bonafide", "medical", "doctor", "card"]):
+    # 12. General FAQs (fees, admission, hostel, bonafide, id card)
+    if _any_word_in_text(["fee", "fees", "admission", "admissions", "hostel", "bonafide", "medical", "doctor", "card"], user_query):
         return {
             "role": "assistant",
             "content": "",
@@ -328,8 +389,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
-    # Default friendly greeting / reception response
-    if any(k in user_query for k in ["hi", "hello", "hey", "greetings", "good morning", "good afternoon"]):
+    # 13. Default friendly greeting (STRICT word boundary matching so 'hi' doesn't match 'this')
+    if _any_word_in_text(["hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening"], user_query):
         return {
             "role": "assistant",
             "content": "Hello and welcome! I am Buddy, the AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune. How may I assist you today?",
