@@ -29,7 +29,7 @@ def run_edge_tts_synthesis(text: str, out_file: Path, voice: str = "en-US-AnaNeu
     """Ultra-fast neural speech synthesis via edge-tts (1-2s response time, zero GPU VRAM)."""
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            pool.submit(asyncio.run, _synthesize_edge_tts(text, out_file, voice)).result(timeout=12.0)
+            pool.submit(asyncio.run, _synthesize_edge_tts(text, out_file, voice)).result(timeout=20.0)
         return out_file.exists() and out_file.stat().st_size > 500
     except Exception as e:
         print(f"[Edge-TTS] Synthesis error: {e}")
@@ -93,10 +93,11 @@ def ensure_fish_tts_server() -> bool:
     return False
 
 
-def extract_spoken_text(text: str, max_chars: int = 1500) -> str:
+def extract_spoken_text(text: str, max_chars: int = 500) -> str:
     """
     Cleans markdown formatting, citations, URLs, and labels from response text
     and preserves complete, fluent natural dialogue for voice synthesis across full stops.
+    Caps spoken dialogue to max_chars to ensure snappy, conversational voice output.
     """
     clean = re.sub(r'\[DEMO DATA\]', '', text, flags=re.IGNORECASE)
     clean = re.sub(r'Here is what I found from the college records:?\s*', '', clean, flags=re.IGNORECASE)
@@ -174,9 +175,7 @@ def convert_float32_wav_to_pcm16(raw: bytes) -> bytes:
 
 def synthesize_speech(text: str) -> Dict[str, Any]:
     """
-    Synthesizes speech using the high-fidelity Fish Audio S2 Pro model.
-    Prioritizes the persistent s2.cpp HTTP server for rapid synthesis (~15s).
-    Falls back to direct CLI execution via FishTTSEngine if the server is offline.
+    Synthesizes speech using the high-fidelity Fish Audio S2 Pro model or Edge-TTS.
     """
     if not settings.TTS_ENABLED:
         return {
@@ -205,6 +204,11 @@ def synthesize_speech(text: str) -> Dict[str, Any]:
                 "file_path": str(edge_filename),
                 "text": clean_text
             }
+        return {
+            "enabled": False,
+            "method": "edge_tts_failed",
+            "message": "Edge-TTS synthesis timed out or failed."
+        }
 
     output_filename = AUDIO_DIR / f"tts_{uuid.uuid4().hex[:8]}.wav"
 

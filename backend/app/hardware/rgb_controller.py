@@ -174,11 +174,13 @@ class RGBController:
         self.current_state = norm_state
         self.current_amplitude = amplitude
 
-        # Suppress identical duplicates (unless frequency or amplitude changed during SPEAKING)
+        # Suppress rapid identical duplicates (within 3.0 seconds)
+        now = time.time()
         if (
             norm_state == self.last_sent_state
             and abs(amplitude - self.last_sent_amplitude) < 0.15
             and norm_state != "SPEAKING"
+            and (now - self.last_contact_time) < 3.0
         ):
             return True
 
