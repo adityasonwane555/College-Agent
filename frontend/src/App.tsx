@@ -74,14 +74,15 @@ export const App: React.FC = () => {
     stopSpeaking,
     toggleMute,
     speak,
-    playInstantAcknowledgment,
     audioInputDevices,
     selectedInputDeviceId,
     changeAudioInputDevice,
     activeMicLabel,
     refreshAudioDevices,
     audioOutputTarget,
-    setAudioOutputTarget
+    setAudioOutputTarget,
+    audioInputSource,
+    setAudioInputSource
   } = useVoice({
     onTranscriptionComplete: (text) => {
       handleSendMessage(text);
@@ -116,9 +117,6 @@ export const App: React.FC = () => {
     api.setLedState('THINKING');
     setStatusText("Consulting college records & documents...");
 
-    // Immediate conversational filler (<200ms reaction time)
-    playInstantAcknowledgment();
-
     try {
       const res = await api.sendChatMessage(trimmed, sessionId);
 
@@ -133,19 +131,17 @@ export const App: React.FC = () => {
 
       setMessages((prev) => [...prev, botMsg]);
 
-      // Exit thinking state immediately
-      setRobotState('happy');
-      setStatusText("Here is what I found!");
-
       // Voice output (asynchronously streams without blocking UI)
       if (res.tts && res.tts.enabled) {
         speak(res.response, res.tts.audio_url);
       } else {
+        setRobotState('happy');
+        setStatusText("Here is what I found!");
         api.setLedState('IDLE');
         setTimeout(() => {
           setRobotState('idle');
           setStatusText('');
-        }, 2500);
+        }, 2000);
       }
     } catch (err: any) {
       setRobotState('error');
@@ -271,6 +267,8 @@ export const App: React.FC = () => {
           onOpenSettings={() => setIsSettingsOpen(true)}
           audioOutputTarget={audioOutputTarget}
           onSelectOutputTarget={setAudioOutputTarget}
+          audioInputSource={audioInputSource}
+          onSelectInputSource={setAudioInputSource}
         />
 
         {/* Suggestion Chips */}
@@ -402,6 +400,8 @@ export const App: React.FC = () => {
           onRefreshDevices={refreshAudioDevices}
           audioOutputTarget={audioOutputTarget}
           onSelectOutputTarget={setAudioOutputTarget}
+          audioInputSource={audioInputSource}
+          onSelectInputSource={setAudioInputSource}
         />
       )}
 

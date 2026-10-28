@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { AppConfig, HealthStatus } from '../types';
+import { api } from '../services/api';
 import { X, Cpu, Mic, Volume2, Globe, Server, CheckCircle2, AlertTriangle, RefreshCw, Radio } from 'lucide-react';
 
 interface SettingsPanelProps {
@@ -13,6 +14,8 @@ interface SettingsPanelProps {
   onRefreshDevices?: () => void;
   audioOutputTarget?: 'robot' | 'laptop' | 'both';
   onSelectOutputTarget?: (target: 'robot' | 'laptop' | 'both') => void;
+  audioInputSource?: 'robot' | 'laptop';
+  onSelectInputSource?: (source: 'robot' | 'laptop') => void;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -25,13 +28,38 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   activeMicLabel,
   onRefreshDevices,
   audioOutputTarget = 'robot',
-  onSelectOutputTarget
+  onSelectOutputTarget,
+  audioInputSource = 'robot',
+  onSelectInputSource
 }) => {
   const [isTestingMic, setIsTestingMic] = useState(false);
   const [micVolume, setMicVolume] = useState(0);
+  const [isTestingRobotMic, setIsTestingRobotMic] = useState(false);
+  const [robotMicResult, setRobotMicResult] = useState<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+
+  const testRobotMic = async () => {
+    setIsTestingRobotMic(true);
+    setRobotMicResult("Capturing 3s audio from ESP32 INMP441...");
+    try {
+      const res = await api.recordEsp32Mic(3);
+      if (res.success) {
+        if (res.text && res.text.trim()) {
+          setRobotMicResult(`Heard: "${res.text.trim()}"`);
+        } else {
+          setRobotMicResult("Success! Audio captured (Whisper detected silence/ambient sound)");
+        }
+      } else {
+        setRobotMicResult(`Error: ${res.error || 'Failed to capture'}`);
+      }
+    } catch (err: any) {
+      setRobotMicResult(`Connection error: ${err.message || 'ESP32 unreachable'}`);
+    } finally {
+      setIsTestingRobotMic(false);
+    }
+  };
 
   const stopMicTest = () => {
     if (animationFrameRef.current) {
@@ -233,12 +261,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           border: '1px solid rgba(0, 240, 255, 0.25)',
           marginBottom: '20px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 700, color: '#00f0ff' }}>
               <Mic size={17} />
               Audio Input Microphone
             </div>
-            {onRefreshDevices && (
+            {onRefreshDevices && audioInputSource === 'laptop' && (
               <button
                 type="button"
                 onClick={onRefreshDevices}
@@ -262,92 +290,199 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             )}
           </div>
 
-          <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>Active:</span>
-            <span style={{
-              color: '#38bdf8',
-              fontWeight: 600,
-              background: 'rgba(56, 189, 248, 0.1)',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              border: '1px solid rgba(56, 189, 248, 0.2)'
-            }}>
-              {activeMicLabel || 'Default Microphone'}
-            </span>
-          </div>
-
-          <select
-            value={selectedInputDeviceId || 'default'}
-            onChange={(e) => {
-              if (onSelectInputDevice) {
-                onSelectInputDevice(e.target.value);
-              }
-            }}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              borderRadius: '8px',
+          {/* Input Source Mode Selector Tabs */}
+          {onSelectInputSource && (
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '14px',
               background: 'rgba(15, 23, 42, 0.9)',
-              border: '1px solid rgba(0, 240, 255, 0.35)',
-              color: '#f8fafc',
-              fontSize: '13px',
-              outline: 'none',
-              cursor: 'pointer',
-              marginBottom: '10px'
-            }}
-          >
-            <option value="default">Default System Microphone</option>
-            {audioInputDevices && audioInputDevices.map((dev, idx) => (
-              <option key={dev.deviceId || idx} value={dev.deviceId}>
-                {dev.label || `Microphone ${idx + 1} (${dev.deviceId.slice(0, 8)}...)`}
-              </option>
-            ))}
-          </select>
-
-          {/* Live Mic Test Meter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
-            <button
-              type="button"
-              onClick={isTestingMic ? stopMicTest : startMicTest}
-              style={{
-                padding: '6px 14px',
-                fontSize: '12px',
-                fontWeight: 600,
-                borderRadius: '8px',
-                background: isTestingMic ? '#ef4444' : 'rgba(0, 240, 255, 0.15)',
-                color: isTestingMic ? '#ffffff' : '#00f0ff',
-                border: isTestingMic ? '1px solid #f87171' : '1px solid rgba(0, 240, 255, 0.4)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              <Radio size={14} />
-              {isTestingMic ? 'Stop Test' : 'Test Microphone'}
-            </button>
-
-            {isTestingMic && (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{
+              padding: '4px',
+              borderRadius: '10px',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <button
+                type="button"
+                onClick={() => onSelectInputSource('robot')}
+                style={{
                   flex: 1,
-                  height: '10px',
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  borderRadius: '5px',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
-                }}>
-                  <div style={{
-                    width: `${micVolume}%`,
-                    height: '100%',
-                    background: micVolume > 60 ? '#ef4444' : micVolume > 25 ? '#34d399' : '#00f0ff',
-                    transition: 'width 0.05s ease'
-                  }} />
-                </div>
-                <span style={{ fontSize: '11px', color: '#94a3b8', minWidth: '32px' }}>{micVolume}%</span>
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: audioInputSource === 'robot' ? '1px solid rgba(0, 240, 255, 0.5)' : '1px solid transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  background: audioInputSource === 'robot' ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.25), rgba(2, 132, 199, 0.4))' : 'transparent',
+                  color: audioInputSource === 'robot' ? '#00f0ff' : '#94a3b8',
+                  fontWeight: audioInputSource === 'robot' ? 700 : 400
+                }}
+              >
+                🎙️ Robot Mic (ESP32 INMP441)
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectInputSource('laptop')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: audioInputSource === 'laptop' ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  background: audioInputSource === 'laptop' ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(14, 165, 233, 0.4))' : 'transparent',
+                  color: audioInputSource === 'laptop' ? '#38bdf8' : '#94a3b8',
+                  fontWeight: audioInputSource === 'laptop' ? 700 : 400
+                }}
+              >
+                💻 Laptop / Browser Mic
+              </button>
+            </div>
+          )}
+
+          {audioInputSource === 'robot' ? (
+            <div style={{
+              background: 'rgba(2, 132, 199, 0.1)',
+              border: '1px solid rgba(0, 240, 255, 0.25)',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '12px',
+              color: '#cbd5e1',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 600, color: '#00f0ff' }}>Hardware Microphone:</span>
+                <span style={{
+                  color: '#34d399',
+                  fontWeight: 600,
+                  background: 'rgba(52, 211, 153, 0.15)',
+                  padding: '2px 8px',
+                  borderRadius: '6px'
+                }}>Active (Default Input)</span>
               </div>
-            )}
-          </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', lineHeight: '1.5' }}>
+                Voice is captured directly by the onboard <strong>INMP441 I2S digital omnidirectional microphone</strong> on the ESP32-S3 over Wi-Fi (16kHz 16-bit PCM), streamed to Faster-Whisper GPU speech recognition, and passed to the Buddy AI model.
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={testRobotMic}
+                  disabled={isTestingRobotMic}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    background: isTestingRobotMic ? 'rgba(245, 158, 11, 0.2)' : 'rgba(0, 240, 255, 0.2)',
+                    color: isTestingRobotMic ? '#f59e0b' : '#00f0ff',
+                    border: '1px solid rgba(0, 240, 255, 0.4)',
+                    cursor: isTestingRobotMic ? 'wait' : 'pointer'
+                  }}
+                >
+                  <Radio size={13} style={{ display: 'inline', marginRight: '6px' }} />
+                  {isTestingRobotMic ? 'Recording 3s from Robot Mic...' : 'Test Robot Mic (3s Capture)'}
+                </button>
+                {robotMicResult && (
+                  <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 500 }}>{robotMicResult}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>Active:</span>
+                <span style={{
+                  color: '#38bdf8',
+                  fontWeight: 600,
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(56, 189, 248, 0.2)'
+                }}>
+                  {activeMicLabel || 'Default Microphone'}
+                </span>
+              </div>
+
+              <select
+                value={selectedInputDeviceId || 'default'}
+                onChange={(e) => {
+                  if (onSelectInputDevice) {
+                    onSelectInputDevice(e.target.value);
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  background: 'rgba(15, 23, 42, 0.9)',
+                  border: '1px solid rgba(0, 240, 255, 0.35)',
+                  color: '#f8fafc',
+                  fontSize: '13px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  marginBottom: '10px'
+                }}
+              >
+                <option value="default">Default System Microphone</option>
+                {audioInputDevices && audioInputDevices.map((dev, idx) => (
+                  <option key={dev.deviceId || idx} value={dev.deviceId}>
+                    {dev.label || `Microphone ${idx + 1} (${dev.deviceId.slice(0, 8)}...)`}
+                  </option>
+                ))}
+              </select>
+
+              {/* Live Mic Test Meter */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={isTestingMic ? stopMicTest : startMicTest}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    background: isTestingMic ? '#ef4444' : 'rgba(0, 240, 255, 0.15)',
+                    color: isTestingMic ? '#ffffff' : '#00f0ff',
+                    border: isTestingMic ? '1px solid #f87171' : '1px solid rgba(0, 240, 255, 0.4)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Radio size={14} />
+                  {isTestingMic ? 'Stop Test' : 'Test Microphone'}
+                </button>
+
+                {isTestingMic && (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      flex: 1,
+                      height: '10px',
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      borderRadius: '5px',
+                      overflow: 'hidden',
+                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}>
+                      <div style={{
+                        width: `${micVolume}%`,
+                        height: '100%',
+                        background: micVolume > 60 ? '#ef4444' : micVolume > 25 ? '#34d399' : '#00f0ff',
+                        transition: 'width 0.05s ease'
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', minWidth: '32px' }}>{micVolume}%</span>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Audio Output Destination (Robot Speaker vs Laptop) */}

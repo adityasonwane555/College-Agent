@@ -13,6 +13,8 @@ interface VoiceControlsProps {
   onOpenSettings?: () => void;
   audioOutputTarget?: 'robot' | 'laptop' | 'both';
   onSelectOutputTarget?: (target: 'robot' | 'laptop' | 'both') => void;
+  audioInputSource?: 'robot' | 'laptop';
+  onSelectInputSource?: (source: 'robot' | 'laptop') => void;
 }
 
 export const VoiceControls: React.FC<VoiceControlsProps> = ({
@@ -26,7 +28,9 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   activeMicLabel,
   onOpenSettings,
   audioOutputTarget = 'both',
-  onSelectOutputTarget
+  onSelectOutputTarget,
+  audioInputSource = 'robot',
+  onSelectInputSource
 }) => {
   const pointerDownTimeRef = useRef<number>(0);
   const isHoldModeRef = useRef<boolean>(false);
@@ -169,6 +173,32 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
         )}
       </div>
 
+      {/* Dynamic Listening Status Banner */}
+      {isRecording && (
+        <div style={{
+          fontSize: '12px',
+          color: audioInputSource === 'robot' ? '#00f0ff' : '#f87171',
+          background: audioInputSource === 'robot' ? 'rgba(0, 240, 255, 0.12)' : 'rgba(239, 68, 68, 0.15)',
+          padding: '4px 14px',
+          borderRadius: '14px',
+          border: audioInputSource === 'robot' ? '1px solid rgba(0, 240, 255, 0.35)' : '1px solid rgba(239, 68, 68, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: audioInputSource === 'robot' ? '#00f0ff' : '#ef4444',
+            display: 'inline-block'
+          }} />
+          {audioInputSource === 'robot'
+            ? 'Listening on Robot Mic (ESP32 INMP441)... Speak to robot'
+            : 'Listening on Laptop Microphone... Speak now'}
+        </div>
+      )}
+
       {/* Mic & Speaker Status Pills */}
       <div style={{
         display: 'flex',
@@ -177,6 +207,54 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
         gap: '8px',
         flexWrap: 'wrap'
       }}>
+        {/* Mic Source Quick Selector */}
+        {onSelectInputSource && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'rgba(15, 23, 42, 0.75)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '12px',
+            padding: '2px 4px'
+          }}>
+            <button
+              type="button"
+              onClick={() => onSelectInputSource('robot')}
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                background: audioInputSource === 'robot' ? 'rgba(0, 240, 255, 0.25)' : 'transparent',
+                color: audioInputSource === 'robot' ? '#00f0ff' : '#94a3b8',
+                fontWeight: audioInputSource === 'robot' ? 600 : 400
+              }}
+              title="ESP32 Onboard INMP441 Microphone (Robot Hardware)"
+            >
+              🎙️ Robot Mic
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelectInputSource('laptop')}
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                background: audioInputSource === 'laptop' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                color: audioInputSource === 'laptop' ? '#38bdf8' : '#94a3b8',
+                fontWeight: audioInputSource === 'laptop' ? 600 : 400
+              }}
+              title="Laptop / PC WebRTC Microphone"
+            >
+              💻 Laptop Mic
+            </button>
+          </div>
+        )}
+
         {/* Active Microphone Pill */}
         {activeMicLabel && (
           <div
