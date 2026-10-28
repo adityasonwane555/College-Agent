@@ -5,9 +5,40 @@ from ..config import settings
 from .prompts import SYSTEM_PROMPT
 from .tool_registry import OLLAMA_TOOLS_SCHEMA, execute_tool
 from ..services.ollama_service import call_ollama_chat, is_ollama_online
-from ..services.gemini_service import is_gemini_available, call_gemini_chat
+from ..services.groq_service import is_groq_available, call_groq_chat
 from ..database.models import CitationModel
 from .fast_path import resolve_fast_path
+
+
+def is_web_or_research_query(query: str) -> bool:
+    """Detects if user is asking for web research, live internet search, or external world facts."""
+    q = query.lower().strip()
+    web_keywords = [
+        "search the web", "search internet", "search online", "look up online",
+        "google", "browse the web", "web search", "internet search", "on the web",
+        "find online", "research online", "latest news", "current weather", "today's news",
+        "who is", "who won", "what happened", "stock price", "current price", "news about",
+        "weather in", "latest updates", "recent events"
+    ]
+    if any(k in q for k in web_keywords):
+        return True
+
+    # Check if asking general research / facts without college terms
+    college_keywords = [
+        "apcoer", "college", "campus", "hod", "principal", "department", "admission",
+        "fee", "hostel", "placement", "syllabus", "exam", "room", "faculty",
+        "thakare", "kadam", "gaikwad", "totla", "abmsp"
+    ]
+    has_college_context = any(k in q for k in college_keywords)
+    if not has_college_context:
+        research_indicators = [
+            "research", "explain", "compare", "how does", "what is", "why is",
+            "tell me about", "history of", "future of", "technology trends", "who invented"
+        ]
+        if any(q.startswith(ri) or f" {ri} " in q for ri in research_indicators):
+            return True
+
+    return False
 
 
 class SessionManager:
@@ -40,7 +71,7 @@ session_manager = SessionManager(max_history=settings.SESSION_MAX_HISTORY)
 
 
 class AgentOrchestrator:
-    """Coordinates Ollama model calls, tool execution, and citation grounding."""
+    """Coordinates Ollama & Groq model calls, tool execution, and citation grounding."""
 
     async def run(
         self,
@@ -68,7 +99,8 @@ class AgentOrchestrator:
         is_simulated = False
         iteration = 0
 
-        use_gemini = is_gemini_available()
+        use_groq = is_groq_available()
+        is_web_research = is_web_or_research_query(user_message)
 
         while iteration < settings.MAX_TOOL_ITERATIONS:
             iteration += 1
@@ -79,8 +111,19 @@ class AgentOrchestrator:
 
             assistant_msg = None
 
-            # Priority 1: Local Ollama Model (qwen2.5:3b on GPU) if USE_LOCAL_LLM_FIRST is True
-            if getattr(settings, "USE_LOCAL_LLM_FIRST", True):
+            # Priority 1: Groq Cloud AI for Web-Based Questions, Deep Research, or when requested
+            if use_groq and (is_web_research or not getattr(settings, "USE_LOCAL_LLM_FIRST", True)):
+                try:
+                    assistant_msg = await call_groq_chat(
+                        messages=history,
+                        tools=OLLAMA_TOOLS_SCHEMA
+                    )
+                except Exception as e:
+                    print(f"[Orchestrator] Groq web/research error: {e}, attempting Ollama fallback...")
+                    assistant_msg = None
+
+            # Priority 2: Local Ollama Model (qwen2.5:3b on GPU) for college campus queries
+            if not assistant_msg and getattr(settings, "USE_LOCAL_LLM_FIRST", True):
                 if await is_ollama_online():
                     try:
                         assistant_msg = await call_ollama_chat(
@@ -91,18 +134,18 @@ class AgentOrchestrator:
                         print(f"[Orchestrator] Local Ollama call error: {e}")
                         assistant_msg = None
 
-            # Priority 2: Gemini Cloud Reasoning (if configured and Ollama offline or disabled)
-            if not assistant_msg and use_gemini:
+            # Priority 3: Groq Cloud AI Fallback if Ollama was offline or failed on college query
+            if not assistant_msg and use_groq:
                 try:
-                    assistant_msg = await call_gemini_chat(
+                    assistant_msg = await call_groq_chat(
                         messages=history,
                         tools=OLLAMA_TOOLS_SCHEMA
                     )
                 except Exception as e:
-                    print(f"[Orchestrator] Gemini error: {e}, falling back to Ollama...")
-                    use_gemini = False
+                    print(f"[Orchestrator] Groq fallback error: {e}")
+                    use_groq = False
 
-            # Priority 3: Fallback to call_ollama_chat (which handles local execution or graceful mock fallback)
+            # Priority 4: Fallback to call_ollama_chat (handles local execution or smart mock fallback)
             if not assistant_msg:
                 assistant_msg = await call_ollama_chat(
                     messages=history,
@@ -116,7 +159,7 @@ class AgentOrchestrator:
             if not tool_calls:
                 final_content = assistant_msg.get("content", "").strip()
                 if not final_content:
-                    final_content = "I have reviewed your request. How else may I assist you with college information?"
+                    final_content = "I have reviewed your request. How else may I assist you?"
 
                 session_manager.add_message(sid, {"role": "assistant", "content": final_content})
                 return {
@@ -135,6 +178,7 @@ class AgentOrchestrator:
                 func_meta = tool_call.get("function", {})
                 tool_name = func_meta.get("name", "")
                 raw_args = func_meta.get("arguments", {})
+                tool_call_id = tool_call.get("id") or f"call_{uuid.uuid4().hex[:8]}"
 
                 if isinstance(raw_args, str):
                     try:
@@ -145,7 +189,7 @@ class AgentOrchestrator:
                     args = raw_args
 
                 if status_callback:
-                    await status_callback("calling_tool", f"Consulting college tool: {tool_name}...")
+                    await status_callback("calling_tool", f"Consulting tool: {tool_name}...")
 
                 tool_result = await execute_tool(tool_name, args)
 
@@ -158,9 +202,10 @@ class AgentOrchestrator:
                 else:
                     serialized_content = str(tool_result)
 
-                # Append tool response message into conversation history
+                # Append tool response message into conversation history with tool_call_id
                 session_manager.add_message(sid, {
                     "role": "tool",
+                    "tool_call_id": tool_call_id,
                     "name": tool_name,
                     "content": serialized_content
                 })

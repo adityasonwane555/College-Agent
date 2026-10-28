@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     USE_LOCAL_LLM_FIRST: bool = True
     ENABLE_FAST_PATH: bool = False
 
-    # Google Gemini AI Integration (Optional Cloud Backup)
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
-    GEMINI_ENABLED: bool = False
+    # Groq Cloud AI Integration (High-Speed LLM & Web Research)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_ENABLED: bool = True
 
     # Fallback to smart simulated assistant if Ollama is not yet downloaded/running
     MOCK_AI_FALLBACK: bool = True
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
         return str(p.resolve())
 
     # Internet Web Search
-    WEB_SEARCH_ENABLED: bool = False
+    WEB_SEARCH_ENABLED: bool = True
     SEARXNG_BASE_URL: str = "http://localhost:8080"
     WEB_SEARCH_TIMEOUT_SECONDS: float = 10.0
 
