@@ -24,7 +24,7 @@
 #define TFT_RST  13
 #define TFT_BLK  14
 
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+Adafruit_ST7789 tft = Adafruit_ST7789(&SPI, TFT_CS, TFT_DC, TFT_RST);
 
 void setup() {
   Serial.begin(115200);
@@ -39,9 +39,12 @@ void setup() {
   pinMode(TFT_BLK, OUTPUT);
   digitalWrite(TFT_BLK, HIGH);
 
-  // Initialize ST7789 in 240x320 portrait mode
+  // Initialize Hardware SPI on ESP32-S3 and ST7789 in 240x320 portrait mode
+  SPI.begin(TFT_SCLK, -1, TFT_MOSI, -1);
   tft.init(240, 320);
+  tft.setSPISpeed(40000000);
   tft.setRotation(0); // 0 = Portrait
+  tft.invertDisplay(false); // Inversion OFF: ensures 0x0000 is black
 
   // 1. Solid Color Screen Tests
   Serial.println("[TFT] Screen fill: RED...");

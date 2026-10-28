@@ -65,6 +65,7 @@
 #define TFT_WIDTH               240
 #define TFT_HEIGHT              320
 #define TFT_ROTATION            0       // 0 or 2 for Portrait mode
+#define TFT_INVERT_COLORS       false   // false = standard black background (fixes Adafruit ST77XX_INVON default); true if inverted panel
 
 // =====================================================================
 // 5. LED PARAMETERS

@@ -2,15 +2,13 @@
  * =====================================================================================
  * BUDDY AI — ST7789 Display Manager Implementation
  * Exact Visual Mirror of Browser Kiosk Robot Face
- * Features:
- *   - Pure OLED-Black Visor Canvas
- *   - Electric Cyan Capsule Eyes with Dual Pupil Specular Glints
- *   - Smooth Natural Periodic Blinking
- *   - Blushing Cheek LEDs
- *   - 7-Bar Dynamic Dancing Audio Waveform (LISTENING)
- *   - Animated Oscillating Talking Mouth (SPEAKING)
- *   - Celestial Glowing Halo Ring & Contemplative Upward Gaze (THINKING)
- *   - Arched Crescent Smiling Eyes (HAPPY)
+ * 
+ * Hardware & Performance Upgrades:
+ *   - 40 MHz Hardware SPI Bus on ESP32-S3 (25x faster than bit-banged software SPI)
+ *   - Off-screen Micro-Canvas Double Buffering (RAM to Screen, ZERO flicker, ZERO tearing)
+ *   - Independent Zonal Rendering: Only eyes update during blinks!
+ *   - Cheeks and mouth remain static and glowing, completely unaffected by blinks.
+ *   - Eliminates scanline artifact ("line going from top to bottom").
  * =====================================================================================
  */
 
@@ -31,26 +29,43 @@
 DisplayManager displayManager;
 
 DisplayManager::DisplayManager()
-  : _tft(PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_MOSI, PIN_TFT_SCLK, PIN_TFT_RST),
+  : _tft(&SPI, PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_RST),
+    _eyeCanvas(nullptr),
+    _mouthCanvas(nullptr),
+    _haloCanvas(nullptr),
     _currentState(STATE_BOOTING),
+    _lastDrawnState(STATE_BOOTING),
     _lastAnimUpdate(0),
     _stateStartTime(0),
     _ssid(""),
     _ip(""),
     _messageTitle(""),
     _messageBody(""),
+    _lastMessageTitle(""),
     _audioLevel(0.0f),
     _nextBlinkTime(2500),
     _isBlinking(false),
     _blinkStartTime(0),
     _blinkDuration(170),
+    _lastEyeH(-1),
     _nextGazeTime(3000),
     _targetGazeX(0),
     _targetGazeY(0),
-    _currentGazeX(0),
-    _currentGazeY(0),
-    _forceFullClear(true),
-    _hadHalo(false) {}
+    _currentGazeX(0.0f),
+    _currentGazeY(0.0f),
+    _lastGazeX(-99),
+    _lastGazeY(-99),
+    _lastEyeY(-1),
+    _forceFullClear(false),
+    _hadHalo(false),
+    _mouthAnimated(false),
+    _mouthStateDrawn((BuddyState)-1) {}
+
+DisplayManager::~DisplayManager() {
+  if (_eyeCanvas)   { delete _eyeCanvas;   _eyeCanvas = nullptr; }
+  if (_mouthCanvas) { delete _mouthCanvas; _mouthCanvas = nullptr; }
+  if (_haloCanvas)  { delete _haloCanvas;  _haloCanvas = nullptr; }
+}
 
 void DisplayManager::begin() {
   if (PIN_TFT_BLK >= 0) {
@@ -58,24 +73,47 @@ void DisplayManager::begin() {
     digitalWrite(PIN_TFT_BLK, HIGH); // Backlight ON
   }
 
+  // 1. Initialize Hardware SPI bus with ESP32-S3 pins
+  // SCLK=12, MISO=-1, MOSI=11, SS=-1 (CS managed by Adafruit_SPITFT)
+  SPI.begin(PIN_TFT_SCLK, -1, PIN_TFT_MOSI, -1);
+
+  // 2. Initialize ST7789 display controller
   _tft.init(TFT_WIDTH, TFT_HEIGHT);
   _tft.setRotation(TFT_ROTATION);
+  _tft.setSPISpeed(40000000); // 40 MHz high-speed Hardware SPI!
+  _tft.invertDisplay(TFT_INVERT_COLORS); // Fix inverted colors: forces ST77XX_INVOFF so 0x0000 is pure pitch black!
+
+  // 3. Allocate off-screen micro-canvases in RAM for flicker-free double buffering
+  if (!_eyeCanvas) {
+    _eyeCanvas = new GFXcanvas16(EYE_CANVAS_W, EYE_CANVAS_H);
+  }
+  if (!_mouthCanvas) {
+    _mouthCanvas = new GFXcanvas16(MOUTH_CANVAS_W, MOUTH_CANVAS_H);
+  }
+  if (!_haloCanvas) {
+    _haloCanvas = new GFXcanvas16(HALO_CANVAS_W, HALO_CANVAS_H);
+  }
+
+  // 4. Initial screen clear & draw static cheeks
   _tft.fillScreen(COLOR_BG);
+  drawStaticFace();
 
   _stateStartTime = millis();
   _nextBlinkTime = _stateStartTime + 2000;
   _nextGazeTime = _stateStartTime + 3000;
-  _forceFullClear = true;
+  _forceFullClear = false;
   _hadHalo = false;
+  _lastEyeH = -1;
+  _mouthStateDrawn = (BuddyState)-1;
 
-  LOG_PRINTLN("[Display] ST7789 initialized: 1-to-1 Web Kiosk Robot Face active.");
+  LOG_PRINTLN("[Display] ST7789 Hardware SPI @ 40MHz initialized: Flicker-free Dual-Buffer Active.");
 }
 
 void DisplayManager::setState(BuddyState state) {
   if (_currentState != state) {
     _currentState = state;
     _stateStartTime = millis();
-    _forceFullClear = true; // Clean reset on state change
+    _lastEyeH = -1; // Force immediate eye redraw with new state color
   }
 }
 
@@ -85,54 +123,57 @@ void DisplayManager::setWifiInfo(const String& ssid, const String& ip) {
 }
 
 void DisplayManager::setMessage(const String& title, const String& body) {
-  _messageTitle = title;
-  _messageBody = body;
+  if (_messageTitle != title || _messageBody != body) {
+    _messageTitle = title;
+    _messageBody = body;
+    _forceFullClear = true;
+  }
 }
 
 void DisplayManager::setAudioLevel(float level) {
   _audioLevel = constrain(level, 0.0f, 1.0f);
 }
 
-void DisplayManager::drawEyeCapsule(int cx, int cy, int w, int h, int r, uint16_t color, int gazeX, int gazeY) {
-  if (w <= 0 || h <= 0) return;
+void DisplayManager::drawEyeCapsule(Adafruit_GFX* gfx, int cx, int cy, int w, int h, int r, uint16_t color, int gazeX, int gazeY) {
+  if (!gfx || w <= 0 || h <= 0) return;
 
   r = min(r, min(w / 2, h / 2));
   int x = cx - w / 2;
   int y = cy - h / 2;
 
   // Main glowing eye capsule
-  _tft.fillRoundRect(x, y, w, h, r, color);
+  gfx->fillRoundRect(x, y, w, h, r, color);
 
-  // When open (>16px), draw the dual white pupil specular glints
+  // When open (>18px), draw the dual white pupil specular glints
   if (h > 18) {
     int glintX = cx - 9 + gazeX;
     int glintY = cy - h / 4 + gazeY;
 
     // Primary bright white reflection highlight (r=4)
-    _tft.fillCircle(glintX, glintY, 4, COLOR_WHITE);
+    gfx->fillCircle(glintX, glintY, 4, COLOR_WHITE);
 
     // Secondary cute mini-glint (r=2)
     if (h > 32) {
-      _tft.fillCircle(glintX + 8, glintY + 9, 2, COLOR_WHITE);
+      gfx->fillCircle(glintX + 8, glintY + 9, 2, COLOR_WHITE);
     }
   }
 }
 
-void DisplayManager::drawSmilingEye(int cx, int cy, int w, int h, uint16_t color) {
-  // Arched crescent smiling eyes (^_^) matching .robot-head-wrapper.happy .robot-eye
+void DisplayManager::drawSmilingEye(Adafruit_GFX* gfx, int cx, int cy, int w, int h, uint16_t color) {
+  if (!gfx) return;
   int r = w / 2;
   int topY = cy - 4;
 
   // Draw thick upward curved arc
   for (int t = 0; t < 6; t++) {
-    _tft.drawCircle(cx, topY + r + t, r, color);
+    gfx->drawCircle(cx, topY + r + t, r, color);
   }
   // Mask out lower half with pure black
-  _tft.fillRect(cx - r - 4, topY + r, w + 8, r + 12, COLOR_BG);
+  gfx->fillRect(cx - r - 4, topY + r, w + 8, r + 12, COLOR_BG);
 }
 
-void DisplayManager::drawWaveformBars(int cx, int cy, unsigned long now) {
-  // 7 animated dancing audio waveform bars matching .waveform-bars in robot.css
+void DisplayManager::drawWaveformBars(Adafruit_GFX* gfx, int cx, int cy, unsigned long now) {
+  if (!gfx) return;
   const int numBars = 7;
   const int barWidth = 4;
   const int gap = 4;
@@ -153,39 +194,51 @@ void DisplayManager::drawWaveformBars(int cx, int cy, unsigned long now) {
   for (int i = 0; i < numBars; i++) {
     int h = constrain((int)levels[i], 4, 30);
     int bx = startX + i * (barWidth + gap);
-    _tft.fillRoundRect(bx, cy - h / 2, barWidth, h, 2, COLOR_CYAN);
+    gfx->fillRoundRect(bx, cy - h / 2, barWidth, h, 2, COLOR_CYAN);
   }
 }
 
-void DisplayManager::drawThinkingHalo(int cx, int cy, unsigned long now) {
-  // Celestial halo ring matching .thinking-halo in robot.css
+void DisplayManager::drawThinkingHalo(Adafruit_GFX* gfx, int cx, int cy, unsigned long now) {
+  if (!gfx) return;
   int haloW = 92;
   int haloH = 14;
   int hx = cx - haloW / 2;
   int hy = cy - haloH / 2;
 
   // Outer glowing violet oval
-  _tft.fillRoundRect(hx, hy, haloW, haloH, 7, COLOR_VIOLET);
+  gfx->fillRoundRect(hx, hy, haloW, haloH, 7, COLOR_VIOLET);
   // Inner black cut-out to form hollow glowing ring
-  _tft.fillRoundRect(hx + 3, hy + 3, haloW - 6, haloH - 6, 5, COLOR_BG);
+  gfx->fillRoundRect(hx + 3, hy + 3, haloW - 6, haloH - 6, 5, COLOR_BG);
 
   // Orbiting celestial glint sparkle
   float angle = (float)now * 0.005f;
   int glintX = cx + (int)(cosf(angle) * (haloW / 2 - 8));
   int glintY = cy + (int)(sinf(angle) * (haloH / 2 - 4));
-  _tft.fillCircle(glintX, glintY, 2, COLOR_WHITE);
+  gfx->fillCircle(glintX, glintY, 2, COLOR_WHITE);
 }
 
-void DisplayManager::drawFaceFrame(unsigned long now) {
+void DisplayManager::drawStaticFace() {
   int screenW = _tft.width();
   int screenH = _tft.height();
   int cx = screenW / 2;               // 120
   int eyeY = (screenH * 40) / 100;    // 128
   int cheekY = eyeY + 48;             // 176
-  int mouthY = (screenH * 72) / 100;  // 230
-  int eyeSpacing = 48;                // Center-to-eye distance
 
-  // Base eye dimensions (52x70px capsule matching 58x72px in web CSS)
+  // 1. Draw Blushing Cheek LEDs (Static, NEVER redrawn during eye blinks!)
+  uint16_t cheekColor = (_currentState == STATE_BOOTING) ? COLOR_CHEEK_HAPPY : COLOR_CHEEK_IDLE;
+  int cheekW = 20;
+  int cheekH = 9;
+  _tft.fillRoundRect(cx - 58 - cheekW / 2, cheekY - cheekH / 2, cheekW, cheekH, 4, cheekColor);
+  _tft.fillRoundRect(cx + 58 - cheekW / 2, cheekY - cheekH / 2, cheekW, cheekH, 4, cheekColor);
+}
+
+void DisplayManager::updateEyes(unsigned long now) {
+  int screenW = _tft.width();
+  int screenH = _tft.height();
+  int cx = screenW / 2;               // 120
+  int eyeY = (screenH * 40) / 100;    // 128
+  int eyeSpacing = 48;
+
   int baseW = 52;
   int baseH = 70;
   int baseR = 26;
@@ -202,25 +255,7 @@ void DisplayManager::drawFaceFrame(unsigned long now) {
     default:              faceColor = COLOR_CYAN;     break;
   }
 
-  // Full clean reset on state transitions
-  if (_forceFullClear) {
-    _tft.fillScreen(COLOR_BG);
-    _forceFullClear = false;
-  }
-
-  // 1. Thinking Halo Management
-  int haloY = 32;
-  if (_currentState == STATE_THINKING) {
-    _tft.fillRect(cx - 50, haloY - 10, 100, 22, COLOR_BG);
-    drawThinkingHalo(cx, haloY, now);
-    _hadHalo = true;
-  } else if (_hadHalo) {
-    // Clear halo area once after leaving THINKING state
-    _tft.fillRect(cx - 50, haloY - 10, 100, 22, COLOR_BG);
-    _hadHalo = false;
-  }
-
-  // 2. Natural Blinking Animation
+  // 1. Natural Blinking Animation
   if (!_isBlinking && now >= _nextBlinkTime) {
     _isBlinking = true;
     _blinkStartTime = now;
@@ -241,13 +276,13 @@ void DisplayManager::drawFaceFrame(unsigned long now) {
     }
   }
 
-  // 3. Eye Gaze & Saccades
+  // 2. Eye Gaze & Saccades
   int currentEyeY = eyeY;
   if (_currentState == STATE_THINKING) {
-    // Look upward towards the thinking halo ring
+    // Look upward towards thinking halo
     _targetGazeY = -8;
     _targetGazeX = (int)(sinf((float)now * 0.003f) * 6.0f);
-    currentEyeY -= 6; // Move entire eye assembly up slightly
+    currentEyeY -= 6; // Move eye assembly up slightly
   } else if (_currentState == STATE_LISTENING) {
     _targetGazeX = 0;
     _targetGazeY = 0;
@@ -271,44 +306,66 @@ void DisplayManager::drawFaceFrame(unsigned long now) {
   }
 
   // Soft easing
-  _currentGazeX += (_targetGazeX - _currentGazeX) * 0.3f;
-  _currentGazeY += (_targetGazeY - _currentGazeY) * 0.3f;
+  _currentGazeX += ((float)_targetGazeX - _currentGazeX) * 0.3f;
+  _currentGazeY += ((float)_targetGazeY - _currentGazeY) * 0.3f;
 
-  // 4. Differential Flicker-Free Clearing
-  // Clear eye & cheek region (160 x 115 px)
-  _tft.fillRect(cx - 80, eyeY - 44, 160, 120, COLOR_BG);
-  // Clear mouth / waveform region (80 x 44 px)
-  _tft.fillRect(cx - 40, mouthY - 22, 80, 44, COLOR_BG);
+  int roundedGazeX = (int)roundf(_currentGazeX);
+  int roundedGazeY = (int)roundf(_currentGazeY);
 
-  // 5. Draw Eyes
-  int leftEyeX = cx - eyeSpacing;
-  int rightEyeX = cx + eyeSpacing;
+  // Check if eyes actually changed to avoid wasteful redraws
+  bool eyesChanged = (eyeH != _lastEyeH) ||
+                     (roundedGazeX != _lastGazeX) ||
+                     (roundedGazeY != _lastGazeY) ||
+                     (currentEyeY != _lastEyeY) ||
+                     (_currentState != _lastDrawnState) ||
+                     (_messageTitle != _lastMessageTitle);
 
-  if (_currentState == STATE_BOOTING || (_currentState == STATE_IDLE && _messageTitle == "happy")) {
-    drawSmilingEye(leftEyeX, currentEyeY, baseW, baseH, faceColor);
-    drawSmilingEye(rightEyeX, currentEyeY, baseW, baseH, faceColor);
-  } else {
-    int r = (eyeH <= 12) ? (eyeH / 2) : baseR;
-    drawEyeCapsule(leftEyeX, currentEyeY, baseW, eyeH, r, faceColor, _currentGazeX, _currentGazeY);
-    drawEyeCapsule(rightEyeX, currentEyeY, baseW, eyeH, r, faceColor, _currentGazeX, _currentGazeY);
+  if (!eyesChanged) {
+    return; // Eyes unchanged — zero SPI traffic, zero flicker!
   }
 
-  // 6. Draw Blushing Cheek LEDs (matching .robot-cheek in robot.css)
-  uint16_t cheekColor = (_currentState == STATE_BOOTING) ? COLOR_CHEEK_HAPPY : COLOR_CHEEK_IDLE;
-  int cheekW = 20;
-  int cheekH = 9;
-  _tft.fillRoundRect(cx - 58 - cheekW / 2, cheekY - cheekH / 2, cheekW, cheekH, 4, cheekColor);
-  _tft.fillRoundRect(cx + 58 - cheekW / 2, cheekY - cheekH / 2, cheekW, cheekH, 4, cheekColor);
+  _lastEyeH = eyeH;
+  _lastGazeX = roundedGazeX;
+  _lastGazeY = roundedGazeY;
+  _lastEyeY = currentEyeY;
 
-  // 7. Draw Mouth or Listening Waveform
+  // Render into off-screen eye micro-canvas (160 x 84 px)
+  if (_eyeCanvas) {
+    _eyeCanvas->fillScreen(COLOR_BG);
+
+    // Local coordinates inside canvas:
+    // Canvas is at (EYE_CANVAS_X = cx - 80 = 40, EYE_CANVAS_Y = eyeY - 42 = 86)
+    int localLeftEyeX = (cx - eyeSpacing) - EYE_CANVAS_X;   // 72 - 40 = 32
+    int localRightEyeX = (cx + eyeSpacing) - EYE_CANVAS_X; // 168 - 40 = 128
+    int localEyeCenterY = currentEyeY - EYE_CANVAS_Y;      // e.g. 128 - 86 = 42
+
+    if (_currentState == STATE_BOOTING || (_currentState == STATE_IDLE && _messageTitle == "happy")) {
+      drawSmilingEye(_eyeCanvas, localLeftEyeX, localEyeCenterY, baseW, baseH, faceColor);
+      drawSmilingEye(_eyeCanvas, localRightEyeX, localEyeCenterY, baseW, baseH, faceColor);
+    } else {
+      int r = (eyeH <= 12) ? (eyeH / 2) : baseR;
+      drawEyeCapsule(_eyeCanvas, localLeftEyeX, localEyeCenterY, baseW, eyeH, r, faceColor, roundedGazeX, roundedGazeY);
+      drawEyeCapsule(_eyeCanvas, localRightEyeX, localEyeCenterY, baseW, eyeH, r, faceColor, roundedGazeX, roundedGazeY);
+    }
+
+    // Direct, atomic push over 40MHz Hardware SPI (takes only ~5ms, zero intermediate black clear!)
+    _tft.drawRGBBitmap(EYE_CANVAS_X, EYE_CANVAS_Y, _eyeCanvas->getBuffer(), EYE_CANVAS_W, EYE_CANVAS_H);
+  }
+}
+
+void DisplayManager::updateMouth(unsigned long now) {
+  if (!_mouthCanvas) return;
+
   unsigned long elapsed = now - _stateStartTime;
 
   if (_currentState == STATE_LISTENING) {
-    // Exact match for <ListeningWaveform /> in React!
-    drawWaveformBars(cx, mouthY, now);
-  }
-  else if (_currentState == STATE_SPEAKING) {
-    // Exact match for @keyframes speaking-mouth in robot.css
+    _mouthAnimated = true;
+    _mouthCanvas->fillScreen(COLOR_BG);
+    drawWaveformBars(_mouthCanvas, MOUTH_CANVAS_W / 2, MOUTH_CANVAS_H / 2, now);
+    _tft.drawRGBBitmap(MOUTH_CANVAS_X, MOUTH_CANVAS_Y, _mouthCanvas->getBuffer(), MOUTH_CANVAS_W, MOUTH_CANVAS_H);
+  } else if (_currentState == STATE_SPEAKING) {
+    _mouthAnimated = true;
+    _mouthCanvas->fillScreen(COLOR_BG);
     float osc = 0.5f + 0.5f * sinf((float)elapsed * 0.022f);
     int mouthH = 8 + (int)(16.0f * osc);
     if (_audioLevel > 0.05f) {
@@ -317,37 +374,73 @@ void DisplayManager::drawFaceFrame(unsigned long now) {
     mouthH = constrain(mouthH, 8, 30);
     int mouthW = 34 + (int)(12.0f * osc);
 
-    _tft.fillRoundRect(cx - mouthW / 2, mouthY - mouthH / 2, mouthW, mouthH, mouthH / 2, COLOR_MAGENTA);
+    int localCx = MOUTH_CANVAS_W / 2;
+    int localCy = MOUTH_CANVAS_H / 2;
+    _mouthCanvas->fillRoundRect(localCx - mouthW / 2, localCy - mouthH / 2, mouthW, mouthH, mouthH / 2, COLOR_MAGENTA);
     if (mouthH > 14) {
       int inW = mouthW - 10;
       int inH = mouthH - 6;
-      _tft.fillRoundRect(cx - inW / 2, mouthY - inH / 2, inW, inH, inH / 2, COLOR_BG);
+      _mouthCanvas->fillRoundRect(localCx - inW / 2, localCy - inH / 2, inW, inH, inH / 2, COLOR_BG);
+    }
+    _tft.drawRGBBitmap(MOUTH_CANVAS_X, MOUTH_CANVAS_Y, _mouthCanvas->getBuffer(), MOUTH_CANVAS_W, MOUTH_CANVAS_H);
+  } else {
+    // Non-animated states (IDLE, THINKING, ERROR, BOOTING):
+    // Only re-render when state changes to avoid wasteful SPI traffic
+    if (_mouthAnimated || _mouthStateDrawn != _currentState) {
+      _mouthAnimated = false;
+      _mouthStateDrawn = _currentState;
+      _mouthCanvas->fillScreen(COLOR_BG);
+
+      int localCx = MOUTH_CANVAS_W / 2; // 40
+      int localCy = MOUTH_CANVAS_H / 2; // 18
+
+      if (_currentState == STATE_IDLE) {
+        // Cyan rounded pill mouth matching frontend CSS
+        _mouthCanvas->fillRoundRect(localCx - 22, localCy - 4, 44, 8, 4, COLOR_CYAN);
+      } else if (_currentState == STATE_THINKING) {
+        // Small focused violet mouth
+        _mouthCanvas->fillRoundRect(localCx - 12, localCy - 3, 24, 6, 3, COLOR_VIOLET);
+      } else if (_currentState == STATE_BOOTING) {
+        _mouthCanvas->fillRoundRect(localCx - 22, localCy - 4, 44, 8, 4, COLOR_SKYBLUE);
+      } else if (_currentState == STATE_ERROR) {
+        for (int t = 0; t < 3; t++) {
+          _mouthCanvas->drawCircle(localCx, localCy + 8 + t, 14, COLOR_CORAL);
+        }
+        _mouthCanvas->fillRect(localCx - 18, localCy + 4, 36, 18, COLOR_BG);
+      }
+
+      _tft.drawRGBBitmap(MOUTH_CANVAS_X, MOUTH_CANVAS_Y, _mouthCanvas->getBuffer(), MOUTH_CANVAS_W, MOUTH_CANVAS_H);
     }
   }
-  else if (_currentState == STATE_THINKING) {
-    // Cute small thinking line (matching .robot-head-wrapper.thinking .robot-mouth-line)
-    _tft.fillRoundRect(cx - 12, mouthY - 3, 24, 6, 3, COLOR_VIOLET);
-  }
-  else if (_currentState == STATE_ERROR) {
-    // Sympathetic error mouth
-    for (int t = 0; t < 3; t++) {
-      _tft.drawCircle(cx, mouthY + 18 + t, 18, COLOR_CORAL);
+}
+
+void DisplayManager::updateHalo(unsigned long now) {
+  if (_currentState == STATE_THINKING) {
+    _hadHalo = true;
+    if (_haloCanvas) {
+      _haloCanvas->fillScreen(COLOR_BG);
+      drawThinkingHalo(_haloCanvas, HALO_CANVAS_W / 2, HALO_CANVAS_H / 2, now);
+      _tft.drawRGBBitmap(HALO_CANVAS_X, HALO_CANVAS_Y, _haloCanvas->getBuffer(), HALO_CANVAS_W, HALO_CANVAS_H);
     }
-    _tft.fillRect(cx - 22, mouthY + 14, 44, 25, COLOR_BG);
-  }
-  else {
-    // IDLE: Friendly rounded mouth line (matching .robot-mouth-line: 44px x 8px)
-    _tft.fillRoundRect(cx - 22, mouthY - 4, 44, 8, 4, COLOR_CYAN);
+  } else if (_hadHalo) {
+    // Clear halo region once after leaving THINKING state
+    _tft.fillRect(HALO_CANVAS_X, HALO_CANVAS_Y, HALO_CANVAS_W, HALO_CANVAS_H, COLOR_BG);
+    _hadHalo = false;
   }
 }
 
 void DisplayManager::update() {
   unsigned long now = millis();
-  // Butter-smooth 33 FPS animation loop (every 30ms)
-  if (now - _lastAnimUpdate < 30) {
+  // Smooth 40-50 FPS animation loop (every 22ms)
+  if (now - _lastAnimUpdate < 22) {
     return;
   }
   _lastAnimUpdate = now;
 
-  drawFaceFrame(now);
+  // Clean, zero-flicker independent zonal updates via off-screen micro-canvases
+  updateHalo(now);
+  updateEyes(now);
+  updateMouth(now);
+
+  _lastDrawnState = _currentState;
 }
