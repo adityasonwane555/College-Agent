@@ -4,6 +4,11 @@ from ..database.repository import repo
 from ..database.models import CitationModel
 
 
+def _word_in_clean(word: str, clean_text: str) -> bool:
+    """Checks if a whole word exists in clean text with word boundaries."""
+    return bool(re.search(r'\b' + re.escape(word) + r'\b', clean_text))
+
+
 def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
     """
     Evaluates incoming query for high-frequency reception desk intents at APCOER Pune.
@@ -12,6 +17,10 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
     """
     q = user_query.strip().lower()
     clean = re.sub(r'[^a-z0-9\s]', '', q)
+
+    # Never intercept personal introductions or self-identifications (let LLM converse naturally)
+    if re.search(r'\b(?:my name is|i am|im|this is|call me)\b', clean):
+        return None
 
     # 1. Greetings, College Name & Persona Identity
     college_tokens = [
@@ -223,7 +232,7 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
             }
 
         # Information Technology (IT) Roster or HOD
-        if ("it" in clean or "information technology" in clean) and any(term in clean for term in ["faculty", "professor", "professors", "teachers", "staff", "members", "team", "roster", "list"]):
+        if ("information technology" in clean or (_word_in_clean("it", clean) and any(_word_in_clean(w, clean) for w in ["dept", "department", "branch", "engineering", "course", "lab", "faculty", "hod"]))) and any(_word_in_clean(term, clean) for term in ["faculty", "professor", "professors", "teachers", "staff", "members", "team", "roster", "list"]):
             return {
                 "response": (
                     "The Information Technology (IT) Department is headed by Dr. Amit Ashokrao Kadam (Head & Associate Professor, Room 304). "
@@ -243,7 +252,7 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
                 "citations": [CitationModel(source="APCOER Faculty Directory", page=1, section="Information Technology", snippet="IT Department Faculty Roster: Dr. Amit Ashokrao Kadam (HOD), Prof. D. P. Rankhambe, Prof. R. S. Lavhe, Prof. S. R. Kokane, Prof. A. N. Kalal, Prof. Rajshri Nikam, Prof. A. R. Dodke, Prof. Dipalee Shah, Prof. Prajakta G. Khaire, Prof. Shital S. Khote, Mr. Ajinkya Patil (3rd Floor)")]
             }
 
-        if "information technology" in clean or "it" in clean or "kadam" in clean or "amit" in clean:
+        if "information technology" in clean or (_word_in_clean("it", clean) and any(_word_in_clean(w, clean) for w in ["dept", "department", "branch", "engineering", "course", "lab", "hod", "cabin"])) or _word_in_clean("kadam", clean) or ("amit" in clean and "kadam" in clean):
             return {
                 "response": (
                     "The Head of the Information Technology (IT) Department is Dr. Amit Ashokrao Kadam! "
@@ -255,7 +264,7 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
             }
 
         # Artificial Intelligence & Data Science (AI & DS)
-        if "ai" in clean or "data science" in clean or "aids" in clean or "musale" in clean or "jitendra" in clean:
+        if "data science" in clean or _word_in_clean("aids", clean) or (_word_in_clean("ai", clean) and any(_word_in_clean(w, clean) for w in ["dept", "department", "branch", "engineering", "course", "ds", "hod", "cabin"])) or _word_in_clean("musale", clean) or _word_in_clean("jitendra", clean):
             return {
                 "response": (
                     "The Head of the Artificial Intelligence and Data Science (AI & DS) Department is Dr. Jitendra Musale! "

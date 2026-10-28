@@ -13,15 +13,17 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):
-    # Ollama Local AI Configuration
+    # Ollama Local AI Configuration (Primary On-Device Engine)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:3b"
-    OLLAMA_TIMEOUT_SECONDS: float = 45.0
+    OLLAMA_TIMEOUT_SECONDS: float = 60.0
+    USE_LOCAL_LLM_FIRST: bool = True
+    ENABLE_FAST_PATH: bool = False
 
-    # Google Gemini AI Integration (Fast Cloud Reasoning)
-    GEMINI_API_KEY: str = "AQ.Ab8RN6JpG7AZR3MwGV9mesuACdNifMuN4MYOdK8bVnKPWD1uMQ"
-    GEMINI_MODEL: str = "gemini-flash-latest"
-    GEMINI_ENABLED: bool = True
+    # Google Gemini AI Integration (Optional Cloud Backup)
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_ENABLED: bool = False
 
     # Fallback to smart simulated assistant if Ollama is not yet downloaded/running
     MOCK_AI_FALLBACK: bool = True

@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 from ..config import settings
 from .prompts import SYSTEM_PROMPT
 from .tool_registry import OLLAMA_TOOLS_SCHEMA, execute_tool
-from ..services.ollama_service import call_ollama_chat
+from ..services.ollama_service import call_ollama_chat, is_ollama_online
 from ..services.gemini_service import is_gemini_available, call_gemini_chat
 from ..database.models import CitationModel
 from .fast_path import resolve_fast_path
@@ -51,17 +51,18 @@ class AgentOrchestrator:
         sid = session_id or str(uuid.uuid4())
         session_manager.add_message(sid, {"role": "user", "content": user_message})
 
-        # 1. Fast-Path Direct Resolution (<10ms for common queries)
-        fast_result = resolve_fast_path(user_message)
-        if fast_result:
-            session_manager.add_message(sid, {"role": "assistant", "content": fast_result["response"]})
-            return {
-                "session_id": sid,
-                "response": fast_result["response"],
-                "citations": fast_result["citations"],
-                "is_simulated": False,
-                "tool_iterations": 0
-            }
+        # 1. Fast-Path Direct Resolution (<10ms for common queries, disabled by default for natural conversational dialogue)
+        if getattr(settings, "ENABLE_FAST_PATH", False):
+            fast_result = resolve_fast_path(user_message)
+            if fast_result:
+                session_manager.add_message(sid, {"role": "assistant", "content": fast_result["response"]})
+                return {
+                    "session_id": sid,
+                    "response": fast_result["response"],
+                    "citations": fast_result["citations"],
+                    "is_simulated": False,
+                    "tool_iterations": 0
+                }
 
         citations: List[CitationModel] = []
         is_simulated = False
@@ -77,7 +78,21 @@ class AgentOrchestrator:
                 await status_callback("thinking", f"Processing response (step {iteration})...")
 
             assistant_msg = None
-            if use_gemini:
+
+            # Priority 1: Local Ollama Model (qwen2.5:3b on GPU) if USE_LOCAL_LLM_FIRST is True
+            if getattr(settings, "USE_LOCAL_LLM_FIRST", True):
+                if await is_ollama_online():
+                    try:
+                        assistant_msg = await call_ollama_chat(
+                            messages=history,
+                            tools=OLLAMA_TOOLS_SCHEMA
+                        )
+                    except Exception as e:
+                        print(f"[Orchestrator] Local Ollama call error: {e}")
+                        assistant_msg = None
+
+            # Priority 2: Gemini Cloud Reasoning (if configured and Ollama offline or disabled)
+            if not assistant_msg and use_gemini:
                 try:
                     assistant_msg = await call_gemini_chat(
                         messages=history,
@@ -87,6 +102,7 @@ class AgentOrchestrator:
                     print(f"[Orchestrator] Gemini error: {e}, falling back to Ollama...")
                     use_gemini = False
 
+            # Priority 3: Fallback to call_ollama_chat (which handles local execution or graceful mock fallback)
             if not assistant_msg:
                 assistant_msg = await call_ollama_chat(
                     messages=history,
