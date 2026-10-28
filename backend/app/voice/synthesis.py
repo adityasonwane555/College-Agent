@@ -56,7 +56,7 @@ def run_fish_audio_api_synthesis(text: str, out_file: Path) -> bool:
         "text": text,
         "format": "mp3"
     }
-    ref_id = getattr(settings, "FISH_AUDIO_REFERENCE_ID", "")
+    ref_id = getattr(settings, "FISH_AUDIO_REFERENCE_ID", "") or "73770ea2927d46c19e461e7e812b2f95"
     if ref_id:
         payload["reference_id"] = ref_id
 

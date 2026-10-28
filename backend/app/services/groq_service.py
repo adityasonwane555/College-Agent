@@ -65,7 +65,25 @@ def _prepare_messages_for_groq(messages: List[Dict[str, Any]]) -> List[Dict[str,
         elif role == "assistant":
             item["content"] = content if content is not None else ""
             if tool_calls:
-                item["tool_calls"] = tool_calls
+                clean_tool_calls = []
+                for tc in tool_calls:
+                    if isinstance(tc, dict):
+                        tc_clean = dict(tc)
+                        fn = tc_clean.get("function")
+                        if isinstance(fn, dict):
+                            fn_clean = dict(fn)
+                            args = fn_clean.get("arguments")
+                            if isinstance(args, dict):
+                                fn_clean["arguments"] = json.dumps(args)
+                            elif args is None:
+                                fn_clean["arguments"] = "{}"
+                            elif not isinstance(args, str):
+                                fn_clean["arguments"] = str(args)
+                            tc_clean["function"] = fn_clean
+                        clean_tool_calls.append(tc_clean)
+                    else:
+                        clean_tool_calls.append(tc)
+                item["tool_calls"] = clean_tool_calls
         else:
             item["content"] = str(content or "")
 

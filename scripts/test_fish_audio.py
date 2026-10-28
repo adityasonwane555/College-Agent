@@ -28,7 +28,7 @@ def test_fish_audio_tts(text: str, output_path: str = "welcome.mp3"):
         return False
 
     model = getattr(settings, "FISH_AUDIO_MODEL", "s2.1-pro-free")
-    ref_id = getattr(settings, "FISH_AUDIO_REFERENCE_ID", "")
+    ref_id = getattr(settings, "FISH_AUDIO_REFERENCE_ID", "") or "73770ea2927d46c19e461e7e812b2f95"
 
     url = "https://api.fish.audio/v1/tts"
     headers = {

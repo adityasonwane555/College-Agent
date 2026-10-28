@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     EDGE_TTS_VOICE: str = "en-US-AnaNeural"
     FISH_AUDIO_API_KEY: str = ""
     FISH_AUDIO_MODEL: str = "s2.1-pro-free"
-    FISH_AUDIO_REFERENCE_ID: str = ""
+    FISH_AUDIO_REFERENCE_ID: str = "73770ea2927d46c19e461e7e812b2f95"
     FISH_TTS_SERVER_URL: str = "http://127.0.0.1:3030"
     FISH_TTS_DIR: str = str(WORKSPACE_DIR / "BUDDY-Fish-TTS")
     TTS_VOICE_PATH: str = ""
