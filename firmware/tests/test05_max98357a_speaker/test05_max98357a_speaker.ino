@@ -7,7 +7,7 @@
  *   MAX98357A BCLK  -> GPIO 15 (I2S1 Bit Clock)
  *   MAX98357A LRC   -> GPIO 16 (I2S1 Word Select)
  *   MAX98357A DIN   -> GPIO 17 (I2S1 Audio Data)
- *   MAX98357A SD    -> Leave unconnected (defaults to mono mix)
+ *   MAX98357A SD    -> Connect to 3.3V Rail (wakes chip up from shutdown & enables Left channel)
  *   SPK+ and SPK-   -> Passive 4 or 8 Ohm Speaker Terminals (NEVER GROUND!)
  * =====================================================================================
  */
@@ -23,7 +23,7 @@
 #define SAMPLE_RATE     24000
 #define BUFFER_SIZE     256
 
-float volume = 0.5f; // Safe volume level (0.0 to 1.0)
+float volume = 0.85f; // Clear audible volume level (0.0 to 1.0)
 
 void playTone(float freqHz, uint32_t durationMs) {
   size_t totalSamples = (SAMPLE_RATE * durationMs) / 1000;
@@ -40,7 +40,7 @@ void playTone(float freqHz, uint32_t durationMs) {
       if (remaining < (totalSamples / 5)) {
         env = (float)remaining / (totalSamples / 5);
       }
-      int16_t sample = (int16_t)(sin(2.0f * PI * freqHz * t) * 12000.0f * volume * env);
+      int16_t sample = (int16_t)(sin(2.0f * PI * freqHz * t) * 24000.0f * volume * env);
       stereoBuffer[i * 2]     = sample; // Left
       stereoBuffer[i * 2 + 1] = sample; // Right
     }

@@ -44,7 +44,7 @@
 | **C** | **MAX98357A BCLK**| **GPIO 15** | Female-to-Male | ESP32 → Amp | 3.3V Logic | I²S Bit Clock | I²S Controller 1 Clock. |
 | **C** | **MAX98357A LRC** | **GPIO 16** | Female-to-Male | ESP32 → Amp | 3.3V Logic | I²S Left/Right Clock | Frame clock. |
 | **C** | **MAX98357A DIN** | **GPIO 17** | Female-to-Male | ESP32 → Amp | 3.3V Logic | I²S Audio Data Output | Audio stream from ESP32 to Amp. |
-| **C** | **MAX98357A SD_MODE**| **Leave Unconnected**| None | Config | Internal | Mode select / Shutdown | Floating mixes L+R into mono. |
+| **C** | **MAX98357A SD_MODE**| **3.3V Rail** | Female-to-Male | Config | 3.3V Logic | Shutdown / Mode Enable | **CRUCIAL:** Must be tied to 3.3V to wake chip from shutdown! |
 | **D** | **Speaker Wire 1** | **MAX98357A SPK+** | Bare wire to block | Amp → Speaker | Analog BTL | Audio signal positive | Screw tightly into terminal. |
 | **D** | **Speaker Wire 2** | **MAX98357A SPK-** | Bare wire to block | Amp → Speaker | Analog BTL | Audio signal negative | **NEVER connect to GND!** |
 | **E** | **Onboard WS2812** | **GPIO 48 (Internal)**| Onboard trace | ESP32 → LED | 3.3V Logic | RGB Animation & States | Pre-wired on PCB. |
@@ -83,7 +83,8 @@
 3. **BCLK** → Connect to **ESP32 GPIO 15**.
 4. **LRC (WS)** → Connect to **ESP32 GPIO 16**.
 5. **DIN** → Connect to **ESP32 GPIO 17**.
-6. **SD_MODE (Shutdown)**: Leave unconnected. The onboard pull-up resistor defaults to $(Left + Right) / 2$ mono mix.
+6. **SD_MODE (Shutdown)**: Connect to the **3.3V rail** (or directly to ESP32 3.3V pin).
+   *(CRUCIAL: Most breakout boards have a 1MΩ pull-down resistor to GND; leaving SD_MODE floating keeps the amplifier in permanent SHUTDOWN mode with zero sound. Connecting SD_MODE to 3.3V wakes the amplifier up and selects Left channel audio).*
 7. **GAIN**: Leave unconnected for default $9\text{ dB}$ gain (clean speech volume).
 
 ### Section D: Passive 4Ω or 8Ω Speaker

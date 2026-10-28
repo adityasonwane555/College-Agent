@@ -21,9 +21,9 @@ AudioOutput::AudioOutput()
 /**
  * Initializes the MAX98357A I2S audio driver.
  * Configures the I2S1 peripheral in Master TX mode.
- * Supports dynamic sample rate switching (e.g. 16 kHz for TTS speech, 44.1 kHz for high-fidelity audio).
+ * Supports dynamic sample rate switching (e.g. 16 kHz for TTS speech, 24 kHz for neural voice).
  *
- * @param sampleRate Audio sampling rate in Hertz (typically 16000 or 44100).
+ * @param sampleRate Audio sampling rate in Hertz (typically 16000 or 24000).
  * @return True if I2S driver installed and GPIO pins successfully mapped.
  */
 bool AudioOutput::begin(uint32_t sampleRate) {
@@ -38,9 +38,9 @@ bool AudioOutput::begin(uint32_t sampleRate) {
 
   // I2S Configuration for MAX98357A:
   // - 16-bit signed PCM samples.
-  // - Stereo slot format (MAX98357A decodes Left/Right depending on SD_MODE resistor,
+  // - Stereo slot format (MAX98357A decodes Left/Right depending on SD_MODE voltage,
   //   requiring standard stereo clock framing).
-  // - 6 DMA buffers of 512 samples each (~64 ms buffer) to eliminate underrun clicks.
+  // - 6 DMA buffers of 512 samples each to eliminate underrun clicks.
   i2s_config_t i2s_config = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
     .sample_rate = _sampleRate,
@@ -108,9 +108,12 @@ size_t AudioOutput::writePcm(const int16_t* samples, size_t sampleCount) {
   for (size_t i = 0; i < sampleCount; i += chunkSize) {
     size_t count = (sampleCount - i < chunkSize) ? (sampleCount - i) : chunkSize;
     for (size_t c = 0; c < count; c++) {
-      int16_t val = (int16_t)(samples[i + c] * _volume);
-      stereoChunk[c * 2]     = val; // Left
-      stereoChunk[c * 2 + 1] = val; // Right
+      int32_t val32 = (int32_t)(samples[i + c] * _volume);
+      if (val32 > 32767) val32 = 32767;
+      if (val32 < -32768) val32 = -32768;
+      int16_t val = (int16_t)val32;
+      stereoChunk[c * 2]     = val; // Left channel
+      stereoChunk[c * 2 + 1] = val; // Right channel
     }
     size_t bytesWritten = 0;
     esp_err_t err = i2s_write(
@@ -118,7 +121,7 @@ size_t AudioOutput::writePcm(const int16_t* samples, size_t sampleCount) {
       (const void*)stereoChunk,
       count * 2 * sizeof(int16_t),
       &bytesWritten,
-      pdMS_TO_TICKS(150)
+      portMAX_DELAY
     );
     if (err == ESP_OK) {
       totalSamplesWritten += (bytesWritten / (sizeof(int16_t) * 2));
@@ -133,29 +136,50 @@ void AudioOutput::playChime() {
     begin(24000);
   }
 
-  LOG_PRINTLN("[AMP] Playing test chime (440Hz -> 880Hz)...");
+  LOG_PRINTLN("[AMP] Playing welcome chime (C5 -> E5 -> G5)...");
 
   const uint32_t sr = 24000;
   const size_t toneSamples = sr / 5; // 200 ms per tone
   int16_t* buf = (int16_t*)malloc(toneSamples * sizeof(int16_t));
   if (!buf) return;
 
-  // Tone 1: 440 Hz (A4)
+  // Tone 1: 523.25 Hz (C5) - Full volume sine wave
   for (size_t i = 0; i < toneSamples; i++) {
-    float env = 1.0f - ((float)i / toneSamples); // Fade out envelope
-    float s = sin(2.0f * PI * 440.0f * ((float)i / sr)) * 8000.0f * env;
+    float env = 1.0f;
+    if (i > (toneSamples * 4 / 5)) {
+      env = (float)(toneSamples - i) / (toneSamples / 5); // Smooth decay to prevent clicks
+    }
+    float s = sin(2.0f * PI * 523.25f * ((float)i / sr)) * 24000.0f * env;
     buf[i] = (int16_t)s;
   }
   writePcm(buf, toneSamples);
 
-  // Short pause (20ms silence)
-  memset(buf, 0, (sr / 50) * sizeof(int16_t));
-  writePcm(buf, sr / 50);
+  // Short pause (25 ms silence)
+  memset(buf, 0, (sr / 40) * sizeof(int16_t));
+  writePcm(buf, sr / 40);
 
-  // Tone 2: 880 Hz (A5)
+  // Tone 2: 659.25 Hz (E5)
   for (size_t i = 0; i < toneSamples; i++) {
-    float env = 1.0f - ((float)i / toneSamples);
-    float s = sin(2.0f * PI * 880.0f * ((float)i / sr)) * 7500.0f * env;
+    float env = 1.0f;
+    if (i > (toneSamples * 4 / 5)) {
+      env = (float)(toneSamples - i) / (toneSamples / 5);
+    }
+    float s = sin(2.0f * PI * 659.25f * ((float)i / sr)) * 24000.0f * env;
+    buf[i] = (int16_t)s;
+  }
+  writePcm(buf, toneSamples);
+
+  // Short pause (25 ms silence)
+  memset(buf, 0, (sr / 40) * sizeof(int16_t));
+  writePcm(buf, sr / 40);
+
+  // Tone 3: 783.99 Hz (G5)
+  for (size_t i = 0; i < toneSamples; i++) {
+    float env = 1.0f;
+    if (i > (toneSamples * 4 / 5)) {
+      env = (float)(toneSamples - i) / (toneSamples / 5);
+    }
+    float s = sin(2.0f * PI * 783.99f * ((float)i / sr)) * 24000.0f * env;
     buf[i] = (int16_t)s;
   }
   writePcm(buf, toneSamples);
