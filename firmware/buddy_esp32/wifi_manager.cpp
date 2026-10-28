@@ -54,8 +54,8 @@ void WifiManager::setupRoutes() {
   _server.on("/api/chime", HTTP_POST, [this]() { handleChime(); });
   _server.on("/api/mic", HTTP_GET, [this]() { handleMicStream(); });
   _server.on("/api/mic/record", HTTP_GET, [this]() { handleMicRecord(); });
-  _server.on("/api/speak", HTTP_POST, [this]() { handleSpeakStream(); });
-  _server.on("/api/speak/raw", HTTP_POST, [this]() { handleSpeakStream(); });
+  _server.on("/api/speak", HTTP_POST, [this]() { handleSpeakEnd(); }, [this]() { handleSpeakRaw(); });
+  _server.on("/api/speak/raw", HTTP_POST, [this]() { handleSpeakEnd(); }, [this]() { handleSpeakRaw(); });
   _server.on("/api/speak", HTTP_OPTIONS, [this]() {
     _server.sendHeader("Access-Control-Allow-Origin", "*");
     _server.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -143,7 +143,7 @@ void WifiManager::handleState() {
   BuddyState targetState = rgbManager.getState();
   if (stateStr == "BOOTING") {
     targetState = STATE_BOOTING;
-  } else if (stateStr == "IDLE" || stateStr == "COMPLETED" || stateStr == "INTERRUPTED" || stateStr == "READY" || stateStr == "DONE") {
+  } else if (stateStr == "IDLE" || stateStr == "COMPLETED" || stateStr == "INTERRUPTED" || stateStr == "READY" || stateStr == "DONE" || stateStr == "HAPPY") {
     targetState = STATE_IDLE;
   } else if (stateStr == "LISTENING") {
     targetState = STATE_LISTENING;
@@ -289,35 +289,58 @@ void WifiManager::handleMicRecord() {
   free(pcmBuffer);
 }
 
-void WifiManager::handleSpeakStream() {
+void WifiManager::handleSpeakRaw() {
+  HTTPRaw& raw = _server.raw();
+  if (raw.status == RAW_START) {
+    LOG_PRINTLN("[Audio] Incoming speech stream started...");
+    rgbManager.setState(STATE_SPEAKING);
+    displayManager.setState(STATE_SPEAKING);
+    displayManager.update();
+    rgbManager.update();
+  } else if (raw.status == RAW_WRITE) {
+    if (raw.currentSize > 0) {
+      const int16_t* samples = (const int16_t*)raw.buf;
+      size_t count = raw.currentSize / sizeof(int16_t);
+
+      // Real-time speech amplitude estimation from PCM stream to drive lip-sync and LED EQ
+      int32_t peak = 0;
+      for (size_t i = 0; i < count; i += 8) {
+        int32_t s = abs((int32_t)samples[i]);
+        if (s > peak) peak = s;
+      }
+      float level = constrain((float)peak / 20000.0f, 0.05f, 1.0f);
+      displayManager.setAudioLevel(level);
+      rgbManager.setAudioLevels(level, level * 0.9f, level * 0.8f, level * 0.5f);
+
+      audioOutput.writePcm(samples, count);
+
+      // Actively refresh display and RGB animation while playing audio chunk
+      displayManager.update();
+      rgbManager.update();
+    }
+  } else if (raw.status == RAW_END) {
+    LOG_PRINTLN("[Audio] Speech stream completed. Draining I2S buffer...");
+    // Keep mouth speaking and LED active while remaining DMA samples drain out of speaker
+    unsigned long startDrain = millis();
+    while (millis() - startDrain < 350) {
+      displayManager.update();
+      rgbManager.update();
+      delay(15);
+    }
+    rgbManager.setState(STATE_IDLE);
+    displayManager.setState(STATE_IDLE);
+    displayManager.update();
+    rgbManager.update();
+  } else if (raw.status == RAW_ABORTED) {
+    LOG_PRINTLN("[Audio] Speech stream aborted.");
+    rgbManager.setState(STATE_IDLE);
+    displayManager.setState(STATE_IDLE);
+  }
+}
+
+void WifiManager::handleSpeakEnd() {
   _server.sendHeader("Access-Control-Allow-Origin", "*");
-  WiFiClient client = _server.client();
-
-  size_t bytesToPlay = 0;
-  if (_server.hasArg("plain")) {
-    // If sent as raw POST body
-    String body = _server.arg("plain");
-    bytesToPlay = body.length();
-  }
-
-  rgbManager.setState(STATE_SPEAKING);
-  displayManager.setState(STATE_SPEAKING);
-
-  // Buffer and write directly to MAX98357A I2S amplifier
-  int16_t buffer[256];
-  size_t totalPlayed = 0;
-
-  if (_server.hasArg("plain")) {
-    const uint8_t* rawData = (const uint8_t*)_server.arg("plain").c_str();
-    size_t len = _server.arg("plain").length();
-    audioOutput.writePcm((const int16_t*)rawData, len / sizeof(int16_t));
-    totalPlayed = len;
-  }
-
-  rgbManager.setState(STATE_IDLE);
-  displayManager.setState(STATE_IDLE);
-
-  _server.send(200, "application/json", "{\"ok\":true,\"played_bytes\":" + String(totalPlayed) + "}");
+  _server.send(200, "application/json", "{\"ok\":true,\"message\":\"Playback finished\"}");
 }
 
 void WifiManager::update() {

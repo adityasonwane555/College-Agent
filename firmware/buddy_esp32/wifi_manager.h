@@ -35,7 +35,8 @@ private:
   void handleChime();
   void handleMicStream();
   void handleMicRecord();
-  void handleSpeakStream();
+  void handleSpeakRaw();
+  void handleSpeakEnd();
 };
 
 extern WifiManager wifiManager;
