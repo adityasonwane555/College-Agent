@@ -383,10 +383,18 @@ def get_esp32_health():
 
 
 @router.post("/hardware/stop-voice")
-def stop_hardware_voice(reset_state: bool = True):
+def stop_hardware_voice(reset_state: Any = True):
     """Immediately halts audio playback on ESP32 speaker and optionally resets display and LED to IDLE."""
-    if reset_state:
+    should_reset = True
+    if isinstance(reset_state, bool):
+        should_reset = reset_state
+    elif isinstance(reset_state, str):
+        should_reset = reset_state.strip().lower() not in ("false", "0", "null", "no", "[object object]")
+    elif isinstance(reset_state, dict):
+        should_reset = False
+
+    if should_reset:
         rgb_controller.set_state("IDLE")
-    esp_res = esp32_client.stop_speaker(reset_display=reset_state)
+    esp_res = esp32_client.stop_speaker(reset_display=should_reset)
     return {"ok": True, "esp32_stopped": esp_res}
 

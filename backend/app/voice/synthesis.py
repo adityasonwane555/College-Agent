@@ -131,11 +131,11 @@ def ensure_fish_tts_server() -> bool:
     return False
 
 
-def extract_spoken_text(text: str, max_chars: int = 500) -> str:
+def extract_spoken_text(text: str, max_chars: int = 1500) -> str:
     """
     Cleans markdown formatting, citations, URLs, and labels from response text
     and preserves complete, fluent natural dialogue for voice synthesis across full stops.
-    Caps spoken dialogue to max_chars to ensure snappy, conversational voice output.
+    Ensures complete sentences are never cut off in the middle of speech.
     """
     clean = re.sub(r'\[DEMO DATA\]', '', text, flags=re.IGNORECASE)
     clean = re.sub(r'Here is what I found from the college records:?\s*', '', clean, flags=re.IGNORECASE)
@@ -176,9 +176,9 @@ def extract_spoken_text(text: str, max_chars: int = 500) -> str:
     # Slices at the last sentence end before max_chars only if exceptionally lengthy
     cutoff = clean[:max_chars]
     last_punct = max(cutoff.rfind('.'), cutoff.rfind('!'), cutoff.rfind('?'))
-    if last_punct > 100:
+    if last_punct > 150:
         return cutoff[:last_punct + 1].strip()
-    return cutoff.strip()
+    return clean[:max_chars].strip()
 
 
 def convert_float32_wav_to_pcm16(raw: bytes) -> bytes:

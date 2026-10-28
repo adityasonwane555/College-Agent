@@ -104,7 +104,8 @@ export const api = {
 
   async stopVoice(resetState: boolean = true): Promise<{ ok: boolean }> {
     try {
-      const res = await fetch(`${API_BASE}/hardware/stop-voice?reset_state=${resetState}`, { method: 'POST' });
+      const isReset = resetState === true;
+      const res = await fetch(`${API_BASE}/hardware/stop-voice?reset_state=${isReset}`, { method: 'POST' });
       return res.json();
     } catch {
       return { ok: false };

@@ -261,7 +261,7 @@ export const App: React.FC = () => {
           isMuted={isMuted}
           onStartRecord={startRecording}
           onStopRecord={stopRecording}
-          onStopSpeaking={stopSpeaking}
+          onStopSpeaking={() => stopSpeaking(true)}
           onToggleMute={toggleMute}
           activeMicLabel={activeMicLabel}
           onOpenSettings={() => setIsSettingsOpen(true)}

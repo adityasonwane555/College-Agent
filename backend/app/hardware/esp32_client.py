@@ -120,7 +120,12 @@ class ESP32Client:
                 logger.warning("Decoded PCM audio buffer is empty.")
                 return False
 
-            client = httpx.Client(timeout=30.0)
+            # Dynamic timeout calculated from audio duration (16-bit mono = 2 bytes per sample)
+            # ESP32 drains PCM at sample_rate, so network stream duration equals audio duration.
+            audio_duration_sec = len(raw_pcm) / float(sample_rate * 2)
+            stream_timeout = max(audio_duration_sec * 2.5 + 30.0, 90.0)
+
+            client = httpx.Client(timeout=stream_timeout)
             with self._streaming_lock:
                 self._active_stream_client = client
             try:

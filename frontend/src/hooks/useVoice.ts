@@ -285,7 +285,7 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     };
 
     // Overall speech safety timer (prevents speech hanging indefinitely under any circumstance)
-    const overallSafetyMs = Math.max(cleanText.length * 100, 4500) + 4000;
+    const overallSafetyMs = Math.max(cleanText.length * 200, 15000) + 30000;
     speechWatchdogRef.current = window.setTimeout(() => {
       if (!isCanceled) {
         console.warn("[Browser Speech] Overall speech safety timer triggered, safely finishing.");
@@ -311,8 +311,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       (window as any).__buddy_active_utterance = utterance;
       activeUtterancesRef.current.push(utterance);
 
-      // Per-chunk watchdog: if Chrome drops onend, automatically advance
-      const chunkTimeoutMs = Math.max(sentences[idx].length * 95, 2500) + 2000;
+      // Per-chunk watchdog: generous timeout preventing premature cuts
+      const chunkTimeoutMs = Math.max(sentences[idx].length * 200, 6000) + 15000;
       if (chunkWatchdogRef.current) {
         clearTimeout(chunkWatchdogRef.current);
       }
@@ -569,24 +569,25 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       }
       currentAudioRef.current = audio;
 
-      // Audio playback start: Confirm and sustain SPEAKING state
-      audio.onplay = () => {
-        setIsSpeaking(true);
-        onStateChange('speaking');
-        api.setLedState('SPEAKING', 0.8);
-
-        // Safety watchdog: ensure state resets if audio element stalls or onended drops
-        const durationSec = (audio.duration && !isNaN(audio.duration) && audio.duration > 0)
+      const armSafetyTimer = () => {
+        const durationSec = (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0)
           ? audio.duration
-          : Math.max(text.length * 0.09, 3.5);
-        const safetyMs = (durationSec * 1000) + 3000;
+          : Math.max(text.length * 0.20, 8.0);
+        // Generous buffer: actual duration + 25 seconds of grace period
+        const safetyMs = (durationSec * 1000) + 25000;
 
         if (audioSafetyTimerRef.current) {
           clearTimeout(audioSafetyTimerRef.current);
         }
         audioSafetyTimerRef.current = window.setTimeout(() => {
-          if (currentAudioRef.current === audio) {
-            console.warn("[Voice] Audio safety watchdog fired, gracefully transitioning to idle.");
+          if (currentAudioRef.current === audio && !audio.paused && !audio.ended) {
+            // If audio is actively still progressing, don't interrupt it!
+            if (audio.duration && !isNaN(audio.duration) && audio.currentTime < (audio.duration - 0.75)) {
+              console.log("[Voice] Audio still progressing smoothly, re-arming watchdog.");
+              armSafetyTimer();
+              return;
+            }
+            console.warn("[Voice] Audio safety watchdog fired after full playback grace period.");
             currentAudioRef.current = null;
             setIsSpeaking(false);
             onStateChange('happy');
@@ -594,6 +595,18 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
             setTimeout(() => onStateChange('idle'), 1800);
           }
         }, safetyMs);
+      };
+
+      audio.onloadedmetadata = () => {
+        armSafetyTimer();
+      };
+
+      // Audio playback start: Confirm and sustain SPEAKING state
+      audio.onplay = () => {
+        setIsSpeaking(true);
+        onStateChange('speaking');
+        api.setLedState('SPEAKING', 0.8);
+        armSafetyTimer();
       };
 
       // Audio playback completion: Transition hardware to IDLE with cheerful happy smile
