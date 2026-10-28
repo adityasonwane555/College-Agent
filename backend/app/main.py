@@ -1,3 +1,15 @@
+import sys
+import io
+
+if sys.platform == "win32":
+    try:
+        if sys.stdout and hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        if sys.stderr and hasattr(sys.stderr, "buffer"):
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import json
 import asyncio
 from contextlib import asynccontextmanager
@@ -10,6 +22,7 @@ from .config import settings, DATA_DIR, WORKSPACE_DIR
 from .api.routes import router
 from .database.seed import seed_database
 from .documents.ingestion import ingest_sample_documents
+from .services.ollama_service import check_ollama_status
 
 
 # Active WebSocket clients tracking
@@ -45,6 +58,17 @@ async def lifespan(app: FastAPI):
     seed_database()
     sample_docs_dir = DATA_DIR / "sample_documents"
     ingest_sample_documents(sample_docs_dir)
+
+    # Check Ollama AI Engine
+    try:
+        ollama_stat = await check_ollama_status()
+        if ollama_stat.get("running"):
+            print(f"[Ollama Local AI] ONLINE (Configured model '{settings.OLLAMA_MODEL}', Found: {ollama_stat.get('model_available')})")
+        else:
+            print(f"[Warning] Ollama Local AI: OFFLINE ({ollama_stat.get('message')}). Fallback to mock simulation is active.")
+    except Exception as e:
+        print(f"[Warning] Ollama status check error: {e}")
+
     print("Buddy Backend Startup Complete. Ready to serve.")
     yield
     print("Buddy Backend Shutting Down...")

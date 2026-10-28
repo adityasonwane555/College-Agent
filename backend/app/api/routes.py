@@ -176,6 +176,41 @@ async def transcribe_voice(audio: UploadFile = File(...)):
                 pass
 
 
+@router.post("/voice/record-esp32")
+async def record_esp32_mic(seconds: int = 4):
+    """
+    Triggers an on-demand audio capture from the ESP32 INMP441 microphone over Wi-Fi,
+    persists the 16kHz WAV file, and runs Faster-Whisper GPU speech recognition.
+    """
+    if seconds < 1:
+        seconds = 1
+    if seconds > 10:
+        seconds = 10
+
+    # Notify hardware LED that listening has started
+    rgb_controller.set_state("LISTENING")
+
+    wav_bytes = esp32_client.fetch_mic_recording(seconds=seconds)
+    if not wav_bytes or len(wav_bytes) <= 44:
+        rgb_controller.set_state("IDLE")
+        return {"success": False, "text": "", "error": "No audio received from ESP32 INMP441 microphone. Please ensure the board is online."}
+
+    # Notify hardware LED that reasoning/transcription has started
+    rgb_controller.set_state("THINKING")
+
+    temp_path = AUDIO_DIR / f"esp32_mic_{uuid.uuid4().hex[:8]}.wav"
+    try:
+        temp_path.write_bytes(wav_bytes)
+        res = transcribe_audio_file(temp_path)
+        return res
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception:
+                pass
+
+
 @router.post("/voice/speak")
 def speak_endpoint(req: SpeakRequest, background_tasks: BackgroundTasks):
     res = synthesize_speech(req.text)
