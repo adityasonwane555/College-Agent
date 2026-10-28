@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     USE_LOCAL_LLM_FIRST: bool = True
     ENABLE_FAST_PATH: bool = False
 
+    # Google Gemini Cloud AI Integration (Online Information Extraction & Web Research)
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_ENABLED: bool = True
+
     # Groq Cloud AI Integration (High-Speed LLM & Web Research)
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"

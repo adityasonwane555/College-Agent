@@ -6,6 +6,7 @@ from .prompts import SYSTEM_PROMPT
 from .tool_registry import OLLAMA_TOOLS_SCHEMA, execute_tool
 from ..services.ollama_service import call_ollama_chat, is_ollama_online
 from ..services.groq_service import is_groq_available, call_groq_chat
+from ..services.gemini_service import is_gemini_available, call_gemini_chat, perform_gemini_web_research
 from ..database.models import CitationModel
 from .fast_path import resolve_fast_path
 
@@ -99,8 +100,29 @@ class AgentOrchestrator:
         is_simulated = False
         iteration = 0
 
+        use_gemini = is_gemini_available()
         use_groq = is_groq_available()
         is_web_research = is_web_or_research_query(user_message)
+
+        # Priority 0: Direct Google Gemini Web Research for live internet queries
+        if is_web_research and use_gemini:
+            if status_callback:
+                await status_callback("thinking", "Researching live internet information with Google Gemini...")
+            try:
+                web_res = await perform_gemini_web_research(user_message, system_prompt=SYSTEM_PROMPT)
+                final_content = web_res.get("response", "").strip()
+                if final_content:
+                    session_manager.add_message(sid, {"role": "assistant", "content": final_content})
+                    return {
+                        "session_id": sid,
+                        "response": final_content,
+                        "citations": web_res.get("citations", []),
+                        "is_simulated": False,
+                        "tool_iterations": 1,
+                        "is_gemini": True
+                    }
+            except Exception as e:
+                print(f"[Orchestrator] Gemini web research error: {e}, attempting multi-turn tool fallback...")
 
         while iteration < settings.MAX_TOOL_ITERATIONS:
             iteration += 1
@@ -111,8 +133,20 @@ class AgentOrchestrator:
 
             assistant_msg = None
 
-            # Priority 1: Groq Cloud AI for Web-Based Questions, Deep Research, or when requested
-            if use_groq and (is_web_research or not getattr(settings, "USE_LOCAL_LLM_FIRST", True)):
+            # Priority 1: Google Gemini Cloud AI for Web Questions, Online Extraction, or Cloud Reasoning
+            if use_gemini and (is_web_research or not getattr(settings, "USE_LOCAL_LLM_FIRST", True)):
+                try:
+                    assistant_msg = await call_gemini_chat(
+                        messages=history,
+                        tools=OLLAMA_TOOLS_SCHEMA
+                    )
+                except Exception as e:
+                    print(f"[Orchestrator] Gemini chat error: {e}, attempting Groq fallback...")
+                    use_gemini = False
+                    assistant_msg = None
+
+            # Priority 2: Groq Cloud AI for Web-Based Questions / Deep Research Fallback
+            if not assistant_msg and use_groq and (is_web_research or not getattr(settings, "USE_LOCAL_LLM_FIRST", True)):
                 try:
                     assistant_msg = await call_groq_chat(
                         messages=history,
@@ -122,7 +156,7 @@ class AgentOrchestrator:
                     print(f"[Orchestrator] Groq web/research error: {e}, attempting Ollama fallback...")
                     assistant_msg = None
 
-            # Priority 2: Local Ollama Model (qwen2.5:3b on GPU) for college campus queries
+            # Priority 3: Local Ollama Model (qwen2.5:3b on GPU) for college campus queries
             if not assistant_msg and getattr(settings, "USE_LOCAL_LLM_FIRST", True):
                 if await is_ollama_online():
                     try:
@@ -134,7 +168,17 @@ class AgentOrchestrator:
                         print(f"[Orchestrator] Local Ollama call error: {e}")
                         assistant_msg = None
 
-            # Priority 3: Groq Cloud AI Fallback if Ollama was offline or failed on college query
+            # Priority 4: Gemini / Groq Cloud AI Fallback if Ollama was offline or failed on college query
+            if not assistant_msg and use_gemini:
+                try:
+                    assistant_msg = await call_gemini_chat(
+                        messages=history,
+                        tools=OLLAMA_TOOLS_SCHEMA
+                    )
+                except Exception as e:
+                    print(f"[Orchestrator] Gemini fallback error: {e}")
+                    use_gemini = False
+
             if not assistant_msg and use_groq:
                 try:
                     assistant_msg = await call_groq_chat(
@@ -145,7 +189,7 @@ class AgentOrchestrator:
                     print(f"[Orchestrator] Groq fallback error: {e}")
                     use_groq = False
 
-            # Priority 4: Fallback to call_ollama_chat (handles local execution or smart mock fallback)
+            # Priority 5: Fallback to call_ollama_chat (handles local execution or smart mock fallback)
             if not assistant_msg:
                 assistant_msg = await call_ollama_chat(
                     messages=history,
