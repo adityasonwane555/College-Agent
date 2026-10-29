@@ -11,8 +11,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onDataModified 
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('buddyadmin2026');
-  const [activeTab, setActiveTab] = useState<'faq' | 'department' | 'event' | 'upload'>('faq');
+  const [activeTab, setActiveTab] = useState<'faq' | 'department' | 'event' | 'upload' | 'review'>('faq');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pendingUpdates, setPendingUpdates] = useState<any[]>([]);
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
+  const [isRebuilding, setIsRebuilding] = useState(false);
 
   // FAQ Form State
   const [faqQ, setFaqQ] = useState('');
@@ -115,14 +118,70 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onDataModified 
       const res = await api.uploadDocument(selectedFile, token);
       setStatusMsg({
         type: 'success',
-        text: `Uploaded & Indexed ${res.metadata.filename} (${res.chunk_count} passages)!`
+        text: `Uploaded & Indexed ${res.metadata.filename} (${res.chunk_count} passages)! Status: ${res.lifecycle_status || 'Processed'}`
       });
       setSelectedFile(null);
       onDataModified?.();
+      if (res.pending_update_id) {
+        fetchPendingUpdates();
+      }
     } catch (err: any) {
       setStatusMsg({ type: 'error', text: err.message });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const fetchPendingUpdates = async () => {
+    if (!token) return;
+    setIsLoadingPending(true);
+    try {
+      const data = await api.listPendingUpdates(token);
+      setPendingUpdates(data);
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message });
+    } finally {
+      setIsLoadingPending(false);
+    }
+  };
+
+  const handleApprove = async (id: number) => {
+    if (!token) return;
+    try {
+      await api.approvePendingUpdate(id, token);
+      setStatusMsg({ type: 'success', text: `Approved update #${id}` });
+      fetchPendingUpdates();
+      onDataModified?.();
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message });
+    }
+  };
+
+  const handleReject = async (id: number) => {
+    if (!token) return;
+    try {
+      await api.rejectPendingUpdate(id, token);
+      setStatusMsg({ type: 'success', text: `Rejected update #${id}` });
+      fetchPendingUpdates();
+      onDataModified?.();
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message });
+    }
+  };
+
+  const handleRebuildIndexes = async () => {
+    if (!token) return;
+    setIsRebuilding(true);
+    try {
+      const res = await api.rebuildIndexes(token);
+      setStatusMsg({
+        type: 'success',
+        text: `Indexes rebuilt! FTS: ${res.fts_indexed_chunks} chunks, Vector: ${res.vector_indexed_chunks} chunks.`
+      });
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message });
+    } finally {
+      setIsRebuilding(false);
     }
   };
 
@@ -244,7 +303,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onDataModified 
                 className={activeTab === 'upload' ? 'btn-primary' : 'btn-secondary'}
                 style={{ fontSize: '12px', padding: '6px 12px' }}
               >
-                Upload Document
+                Upload Universal Document
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('review');
+                  fetchPendingUpdates();
+                }}
+                className={activeTab === 'review' ? 'btn-primary' : 'btn-secondary'}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+              >
+                Review Updates ({pendingUpdates.length})
+              </button>
+              <button
+                onClick={handleRebuildIndexes}
+                disabled={isRebuilding}
+                className="btn-secondary"
+                style={{ fontSize: '12px', padding: '6px 12px', marginLeft: 'auto' }}
+              >
+                {isRebuilding ? 'Rebuilding...' : 'Rebuild Indexes'}
               </button>
             </div>
 
@@ -457,7 +534,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onDataModified 
             {activeTab === 'upload' && (
               <form onSubmit={handleUploadDoc} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={{ fontSize: '13px', color: '#94a3b8' }}>
-                  Upload college PDF or TXT documents (prospectus, syllabi, handbooks). Buddy chunks and indexes documents with exact page numbers for factual grounded answers.
+                  Upload college documents across all supported formats: PDF, DOCX, XLSX, CSV, PPTX, Markdown, Text, JSON, YAML, HTML, ZIP, Images, Audio. Buddy parses, extracts facts, and indexes into SQLite FTS5 and semantic vector memory.
                 </div>
 
                 <div style={{
@@ -470,7 +547,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onDataModified 
                   <FileText size={36} color="#00f0ff" style={{ margin: '0 auto 8px auto', display: 'block' }} />
                   <input
                     type="file"
-                    accept=".pdf,.txt"
+                    accept=".pdf,.docx,.xlsx,.csv,.tsv,.pptx,.txt,.md,.json,.yaml,.html,.zip,.png,.jpg,.wav,.mp3"
                     onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                     style={{ display: 'block', margin: '0 auto', fontSize: '13px', color: '#cbd5e1' }}
                   />
@@ -490,6 +567,75 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onDataModified 
                   {isUploading ? 'Ingesting & Chunking...' : 'Upload & Index into Buddy Knowledge Base'}
                 </button>
               </form>
+            )}
+
+            {/* TAB: Review Knowledge Updates */}
+            {activeTab === 'review' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontSize: '13px', color: '#94a3b8' }}>
+                  Review newly extracted event updates, date changes, and circular revisions before approving into the authoritative institutional database.
+                </div>
+                {isLoadingPending ? (
+                  <div style={{ color: '#94a3b8', fontSize: '13px' }}>Loading pending reviews...</div>
+                ) : pendingUpdates.length === 0 ? (
+                  <div style={{ color: '#64748b', fontSize: '13px', fontStyle: 'italic', padding: '12px 0' }}>
+                    No pending knowledge updates requiring review at this time.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '350px', overflowY: 'auto' }}>
+                    {pendingUpdates.map((item) => {
+                      let parsedData: any = {};
+                      try {
+                        parsedData = JSON.parse(item.extracted_data);
+                      } catch {
+                        parsedData = {};
+                      }
+                      return (
+                        <div key={item.id} style={{
+                          padding: '12px',
+                          borderRadius: '8px',
+                          background: 'rgba(15, 23, 42, 0.6)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 600, color: '#38bdf8', fontSize: '14px' }}>
+                              {parsedData.title || item.entity_type.toUpperCase()}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>{item.created_at}</span>
+                          </div>
+                          {item.notes && (
+                            <div style={{ fontSize: '12px', color: '#fbbf24' }}>
+                              Notice: {item.notes}
+                            </div>
+                          )}
+                          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                            Date: {parsedData.date || 'N/A'} | Venue: {parsedData.venue || 'N/A'}
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                            <button
+                              onClick={() => handleApprove(item.id)}
+                              className="btn-primary"
+                              style={{ fontSize: '11px', padding: '4px 10px' }}
+                            >
+                              Approve & Update Knowledge
+                            </button>
+                            <button
+                              onClick={() => handleReject(item.id)}
+                              className="btn-secondary"
+                              style={{ fontSize: '11px', padding: '4px 10px', color: '#f87171' }}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}

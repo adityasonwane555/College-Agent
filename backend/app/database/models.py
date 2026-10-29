@@ -60,6 +60,16 @@ class EventModel(BaseModel):
     venue: str
     description: str
     organizer: str
+    activities: Optional[str] = ""
+    guests: Optional[str] = ""
+    eligibility: Optional[str] = ""
+    registration_required: Optional[bool] = False
+    registration_deadline: Optional[str] = None
+    registration_url: Optional[str] = None
+    contact_info: Optional[str] = ""
+    document_id: Optional[int] = None
+    version: Optional[int] = 1
+    status: Optional[str] = "approved"
 
 
 class AnnouncementModel(BaseModel):
@@ -77,6 +87,39 @@ class DocumentMetadataModel(BaseModel):
     total_pages: int
     uploaded_at: str
     chunk_count: int
+    file_hash: Optional[str] = ""
+    content_type: Optional[str] = "application/octet-stream"
+    detected_type: Optional[str] = "unknown"
+    status: Optional[str] = "approved"
+    version: Optional[int] = 1
+    warnings: Optional[str] = ""
+    metadata_json: Optional[str] = "{}"
+
+
+class DocumentVersionModel(BaseModel):
+    id: Optional[int] = None
+    document_id: int
+    version: int
+    file_hash: str
+    filename: str
+    action: str  # created, updated, revised, approved, rejected, superseded
+    timestamp: str
+    diff_summary: Optional[str] = ""
+    actor: Optional[str] = "system"
+
+
+class PendingKnowledgeModel(BaseModel):
+    id: Optional[int] = None
+    document_id: Optional[int] = None
+    entity_type: str  # event, faculty, department, general
+    entity_id: Optional[int] = None
+    extracted_data: str  # JSON
+    status: str = "pending"  # pending, approved, rejected
+    confidence: Optional[float] = 1.0
+    created_at: str
+    reviewed_at: Optional[str] = None
+    reviewer: Optional[str] = None
+    notes: Optional[str] = ""
 
 
 class CitationModel(BaseModel):

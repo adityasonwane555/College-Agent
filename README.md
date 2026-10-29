@@ -26,11 +26,12 @@ BUDDY is a complete, locally hosted AI desktop assistant prototype for a future 
    - `get_announcements()`
    - `search_college_documents(query)`
 
-3. **Grounded Document Search & Verified Citations**:
-   - Ingests official PDF and plain text documents (Prospectus, Academic Regulations, Student Handbooks).
-   - Breaks documents into section-aware passages preserving page numbers and source titles.
-   - Displays verifiable citation cards directly in the dialogue transcript.
-   - Refuses to hallucinate missing college facts.
+3. **BUDDY 2.0 Universal Ingestion & Hybrid RAG**:
+   - Ingests all major document types: PDF, DOCX, XLSX, CSV, PPTX, TXT, Markdown, JSON, YAML, HTML, Source Code, ZIP Archives, Images, Audio.
+   - Extracts structured facts (events, schedules, activities, speakers) with cryptographic duplicate detection and versioning.
+   - Persistent Hybrid Retrieval: Combines SQLite structured tables, SQLite FTS5 Full-Text search, and local multilingual vector memory.
+   - 100% capable offline operation using local Ollama (`qwen2.5:3b`) with factual grounding and circuit breakers.
+   - Detailed Guide: [BUDDY 2.0 Architecture & Knowledge Guide](docs/BUDDY_2.0_ARCHITECTURE_AND_KNOWLEDGE_GUIDE.md).
 
 4. **Speech Recognition & Text-To-Speech**:
    - Push-to-talk microphone workflow with browser audio capture.

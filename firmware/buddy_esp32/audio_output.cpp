@@ -82,7 +82,7 @@ bool AudioOutput::begin(uint32_t sampleRate) {
 
 void AudioOutput::stop() {
   if (_isInitialized) {
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT);
+    i2s_zero_dma_buffer(I2S_NUM_1);
     LOG_PRINTLN("[AMP] Audio DMA buffer cleared (immediate silence).");
   }
 }

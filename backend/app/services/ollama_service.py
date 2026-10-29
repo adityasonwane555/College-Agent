@@ -122,8 +122,8 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             return {
                 "role": "assistant",
                 "content": (
-                    f"Hello {candidate_name}! It is a pleasure to meet you. I am Buddy, the AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune. "
-                    "How may I assist you today? Would you like directions to any department or details about our college?"
+                    f"Hello {candidate_name}! It's nice to meet you. I am Buddy, a helpful AI assistant with knowledge of APCOER Pune and general topics. "
+                    "How can I help you today?"
                 ),
                 "is_simulated": True
             }
@@ -159,9 +159,9 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
         return {
             "role": "assistant",
             "content": (
-                "Hello and welcome! I am Buddy, the official AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune. "
-                "Our parent trust is Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad, founded in 1907 with the guiding motto 'Bahujan Hitay, Bahujan Sukhaya') and we are affiliated with Savitribai Phule Pune University (DTE Code: 6794). "
-                "I am delighted to assist you with departments, faculty cabins, campus navigation, placements, and facilities. How can I assist you today?"
+                "I am Buddy, a helpful AI assistant with knowledge about APCOER Pune and general topics. "
+                "Our college is Anantrao Pawar College of Engineering & Research (APCOER), Pune, run by the Akhil Bharatiya Maratha Shikshan Parishad (A.B.M.S. Parishad, founded in 1907 with the guiding motto 'Bahujan Hitay, Bahujan Sukhaya') and affiliated with SPPU (DTE Code: 6794). "
+                "How can I help you today?"
             ),
             "is_simulated": True
         }
@@ -179,11 +179,22 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
             "is_simulated": True
         }
 
+    # Concept / Algorithm queries
+    if _word_in_text("algorithm", user_query) or _word_in_text("algorithms", user_query):
+        return {
+            "role": "assistant",
+            "content": (
+                "An algorithm in computer science is a finite, step-by-step sequence of well-defined, unambiguous instructions "
+                "or mathematical rules designed to solve a specific problem, perform a computation, or process input data to produce a desired output."
+            ),
+            "is_simulated": True
+        }
+
     # 5. Department intent (STRICT whole-word matching to avoid false substring matches like 'it' in 'adityo')
     has_dept_context = _any_word_in_text(["department", "dept", "branch", "engineering", "course", "hod", "lab", "faculty", "syllabus", "admission", "cutoff", "seats", "curriculum"], user_query)
     dept_target = None
 
-    if _word_in_text("computer", user_query) or _word_in_text("cse", user_query) or _word_in_text("comp", user_query):
+    if _word_in_text("cse", user_query) or _word_in_text("comp", user_query) or (_word_in_text("computer", user_query) and (has_dept_context or "engineering" in user_query)):
         dept_target = "Computer Engineering"
     elif _word_in_text("artificial intelligence", user_query) or _word_in_text("aids", user_query) or "ai & ds" in user_query or _word_in_text("data science", user_query):
         dept_target = "Artificial Intelligence and Data Science"
@@ -205,17 +216,26 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
         dept_target = "First Year Engineering (Applied Science)"
 
     if dept_target:
-        return {
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [{
-                "function": {
-                    "name": "get_department",
-                    "arguments": {"name": dept_target}
-                }
-            }],
-            "is_simulated": True
-        }
+        if tools:
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{
+                    "function": {
+                        "name": "get_department",
+                        "arguments": {"name": dept_target}
+                    }
+                }],
+                "is_simulated": True
+            }
+        else:
+            return {
+                "role": "assistant",
+                "content": (
+                    f"The {dept_target} department at APCOER offers high-quality undergraduate engineering programs with state-of-the-art laboratory facilities and experienced faculty."
+                ),
+                "is_simulated": True
+            }
 
     # 6. Faculty / Principal / Leadership intent
     has_faculty_kw = _any_word_in_text(["faculty", "professor", "professors", "hod", "principal", "director", "vice principal", "tpo", "cabin", "consult", "teacher", "teachers", "staff"], user_query)
@@ -393,20 +413,30 @@ def mock_ai_response(messages: List[Dict[str, Any]], tools: Optional[List[Dict[s
     if _any_word_in_text(["hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening"], user_query):
         return {
             "role": "assistant",
-            "content": "Hello and welcome! I am Buddy, the AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune. How may I assist you today?",
+            "content": "Hello! I am Buddy. How can I help you today?",
             "is_simulated": True
         }
 
-    # Fallback to document search to look for answers in official APCOER documents
+    if tools:
+        # Fallback to document search to look for answers in official APCOER documents
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "function": {
+                    "name": "search_college_documents",
+                    "arguments": {"query": user_query}
+                }
+            }],
+            "is_simulated": True
+        }
+
     return {
         "role": "assistant",
-        "content": "",
-        "tool_calls": [{
-            "function": {
-                "name": "search_college_documents",
-                "arguments": {"query": user_query}
-            }
-        }],
+        "content": (
+            "I am Buddy, an intelligent AI assistant with knowledge of APCOER Pune and general topics. "
+            "How can I assist you?"
+        ),
         "is_simulated": True
     }
 

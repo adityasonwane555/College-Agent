@@ -80,9 +80,18 @@ def get_upcoming_events() -> str:
         return "There are no upcoming college events scheduled at this moment."
     formatted = []
     for e in events:
-        formatted.append(
-            f"The event '{e['title']}' organized by {e['organizer']} takes place on {e['date']} at {e['time']} in {e['venue']}. Details: {e['description']}."
-        )
+        details_list = [f"The event '{e['title']}' organized by {e['organizer']} takes place on {e['date']} at {e['time']} in {e['venue']}."]
+        if e.get("guests"):
+            details_list.append(f"Chief Guest / Speakers: {e['guests']}.")
+        if e.get("activities"):
+            details_list.append(f"Scheduled activities: {e['activities']}.")
+        if e.get("registration_required"):
+            reg_text = "Registration is required."
+            if e.get("registration_deadline"):
+                reg_text += f" Registration deadline: {e['registration_deadline']}."
+            details_list.append(reg_text)
+        details_list.append(f"Description: {e['description']}.")
+        formatted.append(" ".join(details_list))
     return " ".join(formatted)
 
 

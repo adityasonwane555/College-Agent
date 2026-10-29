@@ -9,37 +9,45 @@ from ..services.groq_service import is_groq_available, call_groq_chat
 from ..services.gemini_service import is_gemini_available, call_gemini_chat, perform_gemini_web_research
 from ..database.models import CitationModel
 from .fast_path import resolve_fast_path
+from .router import adaptive_router
+from .grounding import verify_response_grounding
 
 
 def is_web_or_research_query(query: str) -> bool:
     """Detects if user is asking for web research, live internet search, or external world facts."""
     q = query.lower().strip()
+
+    # If the question contains college context, it is not an external web query
+    college_keywords = [
+        "apcoer", "college", "campus", "hod", "principal", "department", "departments",
+        "branch", "branches", "admission", "fee", "fees", "hostel", "placement",
+        "syllabus", "exam", "room", "faculty", "thakare", "kadam", "gaikwad", "totla",
+        "abmsp", "sorate", "musale", "deshmukh", "kamble", "newase", "selukar", "jagtap",
+        "robotics", "chief guest", "our college", "this college"
+    ]
+    if any(k in q for k in college_keywords):
+        return False
+
     web_keywords = [
         "search the web", "search internet", "search online", "look up online",
         "google", "browse the web", "web search", "internet search", "on the web",
         "find online", "research online", "latest news", "current weather", "today's news",
-        "who is", "who won", "what happened", "stock price", "current price", "news about",
-        "weather in", "latest updates", "recent events"
+        "who is", "who was", "who won", "what happened", "stock price", "current price",
+        "news about", "weather in", "latest updates", "recent events", "president of",
+        "prime minister of", "capital of", "who wrote", "who painted", "who directed"
     ]
     if any(k in q for k in web_keywords):
         return True
 
-    # Check if asking general research / facts without college terms
-    college_keywords = [
-        "apcoer", "college", "campus", "hod", "principal", "department", "admission",
-        "fee", "hostel", "placement", "syllabus", "exam", "room", "faculty",
-        "thakare", "kadam", "gaikwad", "totla", "abmsp"
+    research_indicators = [
+        "research", "explain", "compare", "how does", "what is", "why is",
+        "tell me about", "history of", "future of", "technology trends", "who invented",
+        "which is", "where is", "when did", "how to"
     ]
-    has_college_context = any(k in q for k in college_keywords)
-    if not has_college_context:
-        research_indicators = [
-            "research", "explain", "compare", "how does", "what is", "why is",
-            "tell me about", "history of", "future of", "technology trends", "who invented"
-        ]
-        if any(q.startswith(ri) or f" {ri} " in q for ri in research_indicators):
-            return True
+    if any(q.startswith(ri) or f" {ri} " in q for ri in research_indicators):
+        return True
 
-    return False
+    return True
 
 
 class SessionManager:
@@ -96,6 +104,21 @@ class AgentOrchestrator:
                     "tool_iterations": 0
                 }
 
+        # 2. Adaptive Multi-Model & Offline Router Resolution
+        history = session_manager.get_history(sid)
+        routed_result = await adaptive_router.route(user_message, history)
+        if routed_result:
+            final_content = routed_result["response"]
+            session_manager.add_message(sid, {"role": "assistant", "content": final_content})
+            return {
+                "session_id": sid,
+                "response": final_content,
+                "citations": routed_result.get("citations", []),
+                "is_simulated": False,
+                "tool_iterations": 0,
+                "provider": routed_result.get("provider", "adaptive_router")
+            }
+
         citations: List[CitationModel] = []
         is_simulated = False
         iteration = 0
@@ -109,14 +132,20 @@ class AgentOrchestrator:
             if status_callback:
                 await status_callback("thinking", "Researching live internet information with Google Gemini...")
             try:
-                web_res = await perform_gemini_web_research(user_message, system_prompt=SYSTEM_PROMPT)
+                history = session_manager.get_history(sid)
+                web_res = await perform_gemini_web_research(user_message, system_prompt=SYSTEM_PROMPT, history=history)
                 final_content = web_res.get("response", "").strip()
                 if final_content:
                     session_manager.add_message(sid, {"role": "assistant", "content": final_content})
+                    raw_citations = web_res.get("citations", [])
+                    clean_citations = [
+                        CitationModel(**c) if isinstance(c, dict) else c
+                        for c in raw_citations
+                    ]
                     return {
                         "session_id": sid,
                         "response": final_content,
-                        "citations": web_res.get("citations", []),
+                        "citations": clean_citations,
                         "is_simulated": False,
                         "tool_iterations": 1,
                         "is_gemini": True

@@ -12,7 +12,11 @@ from ..database.models import (
     FAQModel, DepartmentModel, RoomModel, FacultyModel,
     EventModel, AnnouncementModel, CitationModel
 )
-from ..documents.ingestion import ingest_text_file, ingest_pdf_file
+from ..documents.ingestion import ingest_text_file, ingest_pdf_file, ingest_universal_file
+from ..documents.vector_store import vector_store
+from ..documents.hybrid_retrieval import hybrid_search, build_citations
+from ..services.unified_provider import provider_manager
+from ..security.file_validation import sanitize_filename
 from ..services.ollama_service import check_ollama_status
 from ..agent.orchestrator import orchestrator
 from ..voice.transcription import transcribe_audio_file, is_whisper_installed
@@ -29,6 +33,7 @@ router = APIRouter(prefix="/api")
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    audio_output_target: Optional[str] = "both"
 
 
 class ChatResponse(BaseModel):
@@ -135,7 +140,9 @@ async def chat_endpoint(req: ChatRequest, background_tasks: BackgroundTasks):
             synth = synthesize_speech(result["response"])
             if synth.get("enabled") and synth.get("audio_url"):
                 tts_meta["audio_url"] = synth.get("audio_url")
-                if synth.get("file_path"):
+                # Only stream to physical ESP32 speaker if requested
+                target = (req.audio_output_target or "both").lower()
+                if target in ("robot", "both") and synth.get("file_path"):
                     background_tasks.add_task(_stream_audio_to_esp32_bg, synth["file_path"])
         except Exception as e:
             print(f"[Chat] Pre-synthesis error: {e}")
@@ -231,6 +238,7 @@ def stream_audio_to_speaker(audio_url: str, background_tasks: BackgroundTasks):
 
 
 @router.get("/voice/audio/{filename}")
+@router.head("/voice/audio/{filename}")
 def serve_audio(filename: str):
     file_path = AUDIO_DIR / filename
     if not file_path.exists():
@@ -269,22 +277,39 @@ def get_faqs():
 @router.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
+    auto_approve: bool = False,
     authenticated: bool = Depends(verify_admin_token)
 ):
-    filename = file.filename or "document.txt"
-    dest_path = UPLOAD_DIR / filename
+    safe_name = sanitize_filename(file.filename or "document.txt")
+    dest_path = UPLOAD_DIR / safe_name
     with open(dest_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    if filename.lower().endswith(".pdf"):
-        meta, chunks = ingest_pdf_file(dest_path)
-    else:
-        meta, chunks = ingest_text_file(dest_path)
+    res = ingest_universal_file(dest_path, auto_approve=auto_approve)
+    doc_id = res.get("document_id")
+    raw_doc = repo.get_document_by_id(doc_id) if doc_id else repo.get_document_by_name(safe_name)
+
+    chunk_count = res.get("chunk_count", 0)
+    meta = {
+        "id": doc_id,
+        "filename": safe_name,
+        "title": safe_name.replace("_", " ").rsplit(".", 1)[0],
+        "total_pages": raw_doc["total_pages"] if raw_doc else 1,
+        "uploaded_at": raw_doc["uploaded_at"] if raw_doc else "just now",
+        "chunk_count": chunk_count,
+        "status": res.get("lifecycle_status", "pending_review")
+    }
 
     return {
-        "status": "success",
+        "status": res.get("status", "success"),
         "metadata": meta,
-        "chunk_count": len(chunks)
+        "chunk_count": chunk_count,
+        "lifecycle_status": res.get("lifecycle_status"),
+        "version": res.get("version", 1),
+        "event_extracted": res.get("event_extracted"),
+        "diff_summary": res.get("diff_summary"),
+        "pending_update_id": res.get("pending_update_id"),
+        "warnings": res.get("warnings", [])
     }
 
 
@@ -293,11 +318,69 @@ def list_documents():
     return repo.list_documents()
 
 
+@router.get("/documents/search")
+def search_documents_endpoint(query: str, top_k: int = 5):
+    results = hybrid_search(query, top_k=top_k)
+    citations = build_citations(results)
+    return {
+        "query": query,
+        "count": len(results),
+        "results": results,
+        "citations": citations
+    }
+
+
 # --- Admin Authentication & Management ---
 @router.post("/admin/login")
 def admin_login(req: AdminLoginRequest):
     token = authenticate_admin(req.username, req.password)
     return {"status": "authenticated", "token": token}
+
+
+# --- Admin Knowledge Approval & Lifecycle Endpoints ---
+@router.get("/admin/knowledge/pending")
+def list_pending_knowledge_updates(auth: bool = Depends(verify_admin_token)):
+    return repo.list_pending_updates(status="pending")
+
+
+@router.post("/admin/knowledge/approve/{update_id}")
+def approve_knowledge_update(update_id: int, auth: bool = Depends(verify_admin_token)):
+    success = repo.approve_pending_update(update_id, reviewer="admin")
+    if not success:
+        raise HTTPException(status_code=404, detail="Pending update not found or already processed.")
+    return {"status": "approved", "update_id": update_id}
+
+
+@router.post("/admin/knowledge/reject/{update_id}")
+def reject_knowledge_update(update_id: int, auth: bool = Depends(verify_admin_token)):
+    success = repo.reject_pending_update(update_id, reviewer="admin")
+    if not success:
+        raise HTTPException(status_code=404, detail="Pending update not found.")
+    return {"status": "rejected", "update_id": update_id}
+
+
+@router.get("/admin/knowledge/versions")
+def list_document_versions_endpoint(document_id: Optional[int] = None, auth: bool = Depends(verify_admin_token)):
+    return repo.list_document_versions(document_id=document_id)
+
+
+@router.post("/admin/indexes/rebuild")
+def rebuild_indexes_endpoint(auth: bool = Depends(verify_admin_token)):
+    res = vector_store.rebuild_all_indexes()
+    return res
+
+
+@router.get("/admin/diagnostics")
+async def get_system_diagnostics(auth: bool = Depends(verify_admin_token)):
+    health = await provider_manager.get_all_health()
+    pending = repo.list_pending_updates()
+    docs = repo.list_documents()
+    return {
+        "providers": health,
+        "total_documents": len(docs),
+        "pending_reviews": len(pending),
+        "vector_indexing_errors": vector_store.indexing_errors
+    }
 
 
 @router.post("/admin/faq")
@@ -383,18 +466,13 @@ def get_esp32_health():
 
 
 @router.post("/hardware/stop-voice")
-def stop_hardware_voice(reset_state: Any = True):
-    """Immediately halts audio playback on ESP32 speaker and optionally resets display and LED to IDLE."""
-    should_reset = True
-    if isinstance(reset_state, bool):
-        should_reset = reset_state
-    elif isinstance(reset_state, str):
-        should_reset = reset_state.strip().lower() not in ("false", "0", "null", "no", "[object object]")
-    elif isinstance(reset_state, dict):
-        should_reset = False
+def stop_hardware_voice(target_state: str = "IDLE", reset_state: Any = True):
+    """Immediately halts audio playback on ESP32 speaker and synchronizes display & LED."""
+    target = target_state.strip().upper() if target_state else "IDLE"
+    if target not in ("IDLE", "LISTENING", "THINKING", "SPEAKING", "HAPPY", "ERROR"):
+        target = "IDLE"
 
-    if should_reset:
-        rgb_controller.set_state("IDLE")
-    esp_res = esp32_client.stop_speaker(reset_display=should_reset)
-    return {"ok": True, "esp32_stopped": esp_res}
+    rgb_controller.set_state(target)
+    esp_res = esp32_client.stop_speaker(target_state=target)
+    return {"ok": True, "state": target, "esp32_stopped": esp_res}
 

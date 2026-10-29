@@ -1,9 +1,17 @@
+"""
+BUDDY AI 2.0 — Universal Ingestion Entry Point
+Maintains backwards compatibility for ingest_text_file and ingest_pdf_file
+while connecting to the modular universal processor registry and lifecycle manager.
+"""
+
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
 from ..database.repository import repo
 from ..database.models import DocumentMetadataModel
+from .processors.registry import processor_registry
+from .lifecycle import lifecycle_manager
 
 try:
     from pypdf import PdfReader
@@ -47,71 +55,60 @@ def chunk_text(text: str, page_number: int = 1, doc_name: str = "") -> List[Dict
     return chunks
 
 
+def ingest_universal_file(filepath: Path, auto_approve: bool = False, actor: str = "admin") -> Dict[str, Any]:
+    """Universal ingestion entry point for any supported document format."""
+    return lifecycle_manager.process_and_ingest(filepath, auto_approve=auto_approve, actor=actor)
+
+
 def ingest_text_file(filepath: Path) -> Tuple[DocumentMetadataModel, List[Dict[str, Any]]]:
-    """Ingests a text file, parsing optional page markers like '=== PAGE X ==='."""
-    with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-        content = f.read()
+    """Ingests a text file and returns metadata and chunks (preserves existing API contract)."""
+    res = lifecycle_manager.process_and_ingest(filepath, auto_approve=True)
+    doc_id = res.get("document_id")
+    raw_doc = repo.get_document_by_id(doc_id) if doc_id else repo.get_document_by_name(filepath.name)
 
-    filename = filepath.name
-    title = filename.replace("_", " ").rsplit(".", 1)[0]
-    
-    # Check for page markers
-    page_splits = re.split(r"===\s*PAGE\s*(\d+)\s*===", content, flags=re.IGNORECASE)
-    chunks: List[Dict[str, Any]] = []
-
-    if len(page_splits) > 1:
-        # Formatted pages: ['', '1', 'page 1 content', '2', 'page 2 content'...]
-        total_pages = 0
-        for i in range(1, len(page_splits), 2):
-            page_num = int(page_splits[i])
-            page_content = page_splits[i+1]
-            total_pages = max(total_pages, page_num)
-            page_chunks = chunk_text(page_content, page_number=page_num, doc_name=filename)
-            chunks.extend(page_chunks)
-    else:
-        # Single page / natural paragraph chunking
-        total_pages = 1
-        chunks = chunk_text(content, page_number=1, doc_name=filename)
+    chunks = []
+    if raw_doc:
+        with repo.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT page_number, section_title, content FROM document_chunks WHERE document_name = ?", (filepath.name,))
+            chunks = [dict(r) for r in cursor.fetchall()]
 
     meta = DocumentMetadataModel(
-        filename=filename,
-        title=title,
-        total_pages=max(1, total_pages),
-        uploaded_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        chunk_count=len(chunks)
+        id=doc_id,
+        filename=filepath.name,
+        title=filepath.name.replace("_", " ").rsplit(".", 1)[0],
+        total_pages=raw_doc["total_pages"] if raw_doc else 1,
+        uploaded_at=raw_doc["uploaded_at"] if raw_doc else datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        chunk_count=len(chunks),
+        file_hash=res.get("file_hash", ""),
+        status="approved"
     )
-
-    repo.save_document(meta, chunks)
     return meta, chunks
 
 
 def ingest_pdf_file(filepath: Path) -> Tuple[DocumentMetadataModel, List[Dict[str, Any]]]:
-    """Ingests a PDF file page by page using pypdf."""
-    if not PYPDF_AVAILABLE:
-        raise RuntimeError("pypdf is not installed. PDF ingestion is disabled.")
+    """Ingests a PDF file and returns metadata and chunks (preserves existing API contract)."""
+    res = lifecycle_manager.process_and_ingest(filepath, auto_approve=True)
+    doc_id = res.get("document_id")
+    raw_doc = repo.get_document_by_id(doc_id) if doc_id else repo.get_document_by_name(filepath.name)
 
-    reader = PdfReader(str(filepath))
-    total_pages = len(reader.pages)
-    filename = filepath.name
-    title = filename.replace("_", " ").rsplit(".", 1)[0]
-    chunks: List[Dict[str, Any]] = []
-
-    for idx, page in enumerate(reader.pages):
-        page_num = idx + 1
-        page_text = page.extract_text() or ""
-        if page_text.strip():
-            page_chunks = chunk_text(page_text, page_number=page_num, doc_name=filename)
-            chunks.extend(page_chunks)
+    chunks = []
+    if raw_doc:
+        with repo.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT page_number, section_title, content FROM document_chunks WHERE document_name = ?", (filepath.name,))
+            chunks = [dict(r) for r in cursor.fetchall()]
 
     meta = DocumentMetadataModel(
-        filename=filename,
-        title=title,
-        total_pages=total_pages,
-        uploaded_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        chunk_count=len(chunks)
+        id=doc_id,
+        filename=filepath.name,
+        title=filepath.name.replace("_", " ").rsplit(".", 1)[0],
+        total_pages=raw_doc["total_pages"] if raw_doc else 1,
+        uploaded_at=raw_doc["uploaded_at"] if raw_doc else datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        chunk_count=len(chunks),
+        file_hash=res.get("file_hash", ""),
+        status="approved"
     )
-
-    repo.save_document(meta, chunks)
     return meta, chunks
 
 

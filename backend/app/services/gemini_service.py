@@ -226,12 +226,17 @@ async def call_gemini_chat(
     raise RuntimeError(f"All Gemini candidate models failed. Last error: {last_error}")
 
 
-async def perform_gemini_web_research(query: str, system_prompt: str = "") -> Dict[str, Any]:
+async def perform_gemini_web_research(
+    query: str,
+    system_prompt: str = "",
+    history: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
     """
     High-accuracy real-time web research & online data extraction.
     1. Fetches live, fresh search results from the web via web_tools.
-    2. Sends the live data to Google Gemini to synthesize a natural, spoken APCOER receptionist response.
-    3. Returns the synthesized text along with grounded source citations and URLs.
+    2. Sends the live data to Google Gemini to synthesize a natural, direct answer.
+    3. Preserves conversation context across multi-turn exchanges.
+    4. Returns the synthesized text along with grounded source citations and URLs.
     """
     from ..tools.web_tools import search_internet
 
@@ -245,24 +250,33 @@ async def perform_gemini_web_research(query: str, system_prompt: str = "") -> Di
         snippets = "No real-time web results found for this specific query."
 
     # Step 2: Build Grounded Synthesis Prompt for Gemini
-    synthesis_prompt = f"""User Inquiry: "{query}"
+    synthesis_prompt = f"""User Question: "{query}"
 
 === LIVE WEB RESEARCH & REAL-TIME INTERNET DATA ===
 {snippets}
 ===================================================
 
 INSTRUCTIONS:
-1. You are BUDDY, the warm and intelligent AI Receptionist at Anantrao Pawar College of Engineering & Research (APCOER), Pune.
-2. Synthesize the above live web search data to directly and accurately answer the user's question.
-3. Speak in natural, friendly conversational dialogue (2 to 4 sentences).
-4. Do NOT use bullet points, markdown bold headers, or database keys.
-5. Pronounce college acronyms letter-by-letter as initialisms (e.g., A, P, C, O, E, R).
-6. End with a helpful, friendly closing question.
+1. You are Buddy, a helpful, intelligent, and natural conversational AI assistant.
+2. Directly and accurately answer the user's actual question using the verified live web data above.
+3. If the question is about general topics, tourist destinations, world events, or people, answer directly and naturally without forcing APCOER or college references into the conversation.
+4. Do NOT repeatedly introduce yourself (avoid "Hello! I am Buddy...") or claim to be a college receptionist.
+5. Do NOT add irrelevant closing sales pitches or ask if the user wants to visit the campus unless they asked about it.
+6. Provide concise, clear, and informative conversational dialogue.
 """
 
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
+
+    # Include previous conversation turns for multi-turn context awareness
+    if history:
+        for turn in history:
+            role = turn.get("role")
+            content = turn.get("content", "")
+            if role in ("user", "assistant") and content and content != query:
+                messages.append({"role": role, "content": content})
+
     messages.append({"role": "user", "content": synthesis_prompt})
 
     res = await call_gemini_chat(messages=messages, temperature=0.3, max_tokens=600)

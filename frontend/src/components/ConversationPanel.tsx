@@ -180,7 +180,11 @@ export const ConversationPanel: React.FC<ConversationPanelProps> = ({ messages, 
                       }}
                     >
                       <BookOpen size={12} />
-                      {msg.citations.length} Verified Source Reference{msg.citations.length > 1 ? 's' : ''}
+                      {(() => {
+                        const isWeb = msg.citations.some(c => c.source && (c.source.startsWith('http://') || c.source.startsWith('https://')));
+                        const label = isWeb ? 'Web Source' : 'Institutional Source';
+                        return `${msg.citations.length} ${label}${msg.citations.length > 1 ? 's' : ''}`;
+                      })()}
                       {expandedCitations[msg.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                     </button>
 
@@ -192,24 +196,44 @@ export const ConversationPanel: React.FC<ConversationPanelProps> = ({ messages, 
                         gap: '6px',
                         fontSize: '12px'
                       }}>
-                        {msg.citations.map((cite, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              padding: '6px 10px',
-                              borderRadius: '8px',
-                              background: 'rgba(15, 23, 42, 0.75)',
-                              borderLeft: '3px solid #00f0ff'
-                            }}
-                          >
-                            <div style={{ color: '#00f0ff', fontWeight: 600, fontSize: '11px' }}>
-                              📄 {cite.source} {cite.page ? `• Page ${cite.page}` : ''} {cite.section ? `• ${cite.section}` : ''}
+                        {msg.citations.map((cite, idx) => {
+                          const isUrl = cite.source && (cite.source.startsWith('http://') || cite.source.startsWith('https://'));
+                          return (
+                            <div
+                              key={idx}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '8px',
+                                background: 'rgba(15, 23, 42, 0.75)',
+                                borderLeft: '3px solid #00f0ff'
+                              }}
+                            >
+                              <div style={{ color: '#00f0ff', fontWeight: 600, fontSize: '11px' }}>
+                                {isUrl ? (
+                                  <>
+                                    🌐 <a
+                                      href={cite.source}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ color: '#38bdf8', textDecoration: 'underline' }}
+                                    >
+                                      {cite.section || cite.source}
+                                    </a>
+                                  </>
+                                ) : (
+                                  <>
+                                    📄 {cite.source} {cite.page ? `• Page ${cite.page}` : ''} {cite.section ? `• ${cite.section}` : ''}
+                                  </>
+                                )}
+                              </div>
+                              {cite.snippet && (
+                                <div style={{ color: '#94a3b8', fontStyle: 'italic', marginTop: '2px', fontSize: '11px' }}>
+                                  "{cite.snippet}"
+                                </div>
+                              )}
                             </div>
-                            <div style={{ color: '#94a3b8', fontStyle: 'italic', marginTop: '2px', fontSize: '11px' }}>
-                              "{cite.snippet}"
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

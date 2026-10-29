@@ -4,6 +4,7 @@ import { Mic, Volume2, VolumeX, Square } from 'lucide-react';
 interface VoiceControlsProps {
   isRecording: boolean;
   isSpeaking: boolean;
+  robotState?: string;
   isMuted: boolean;
   onStartRecord: () => void;
   onStopRecord: () => void;
@@ -20,6 +21,7 @@ interface VoiceControlsProps {
 export const VoiceControls: React.FC<VoiceControlsProps> = ({
   isRecording,
   isSpeaking,
+  robotState,
   isMuted,
   onStartRecord,
   onStopRecord,
@@ -153,22 +155,30 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
         )}
 
         {/* Stop Speaking Interruption Button */}
-        {isSpeaking && (
+        {(isSpeaking || robotState === 'speaking') && (
           <button
             onClick={onStopSpeaking}
-            className="btn-secondary"
             style={{
               height: '44px',
               borderRadius: '22px',
-              padding: '0 16px',
-              color: '#fbbf24',
-              borderColor: 'rgba(251, 191, 36, 0.4)',
-              background: 'rgba(251, 191, 36, 0.15)'
+              padding: '0 18px',
+              background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+              color: '#ffffff',
+              border: '2px solid #fecaca',
+              boxShadow: '0 0 20px rgba(239, 68, 68, 0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '13px',
+              letterSpacing: '0.04em',
+              animation: 'pulse 1.2s infinite alternate'
             }}
-            title="Interrupt / Stop Speaking"
+            title="Interrupt and stop Buddy talking immediately"
           >
-            <Square size={14} fill="#fbbf24" />
-            <span style={{ fontSize: '13px', fontWeight: 600 }}>Stop Voice</span>
+            <Square size={15} fill="#ffffff" />
+            <span>STOP TALKING</span>
           </button>
         )}
       </div>

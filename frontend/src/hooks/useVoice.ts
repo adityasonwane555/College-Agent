@@ -133,15 +133,22 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const activeAudiosRef = useRef<Set<HTMLAudioElement>>(new Set());
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const speechHeartbeatRef = useRef<number | null>(null);
   const eqIntervalRef = useRef<number | null>(null);
   const audioSafetyTimerRef = useRef<number | null>(null);
   const chunkWatchdogRef = useRef<number | null>(null);
   const speechWatchdogRef = useRef<number | null>(null);
+  const transitionTimerRef = useRef<number | null>(null);
+  const speechGenerationIdRef = useRef<number>(0);
+  const isCanceledRef = useRef<boolean>(false);
 
-  // Stop current speech playback (optionally preserving state for immediate transitions)
-  const stopSpeaking = useCallback((resetState: boolean = true) => {
+  const clearAllVoiceTimers = useCallback(() => {
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
     if (eqIntervalRef.current) {
       clearInterval(eqIntervalRef.current);
       eqIntervalRef.current = null;
@@ -162,43 +169,102 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       clearTimeout(speechWatchdogRef.current);
       speechWatchdogRef.current = null;
     }
+  }, []);
+
+  // Stop current speech playback and synchronously align UI and hardware state
+  const stopSpeaking = useCallback((targetStateOrReset: boolean | RobotState = 'idle') => {
+    speechGenerationIdRef.current++;
+    isCanceledRef.current = true;
+    clearAllVoiceTimers();
+
     activeUtterancesRef.current = [];
     (window as any).__buddy_active_utterance = null;
+
+    // 1. Immediately mute and halt ALL active Audio elements tracked in registry
+    activeAudiosRef.current.forEach((a) => {
+      try {
+        a.pause();
+        a.muted = true;
+        a.volume = 0;
+        a.currentTime = 0;
+        a.onplay = null;
+        a.onended = null;
+        a.onerror = null;
+        a.onloadedmetadata = null;
+        a.src = '';
+      } catch {}
+    });
+    activeAudiosRef.current.clear();
+
     if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
+      const a = currentAudioRef.current;
+      a.onplay = null;
+      a.onended = null;
+      a.onerror = null;
+      a.onloadedmetadata = null;
+      try {
+        a.pause();
+        a.muted = true;
+        a.volume = 0;
+        a.currentTime = 0;
+        a.src = '';
+      } catch {}
       currentAudioRef.current = null;
     }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+
+    // 2. Mute and stop any audio element present in the document
+    if (typeof document !== 'undefined') {
+      try {
+        document.querySelectorAll('audio').forEach((el) => {
+          try {
+            el.pause();
+            el.muted = true;
+            el.volume = 0;
+            el.currentTime = 0;
+          } catch {}
+        });
+      } catch {}
     }
+
+    // 3. Immediately halt browser speech synthesis in Chromium/WebKit on Windows
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        // Speak zero-length silent utterance to flush Chromium's Windows SAPI audio buffer
+        const silentUtterance = new SpeechSynthesisUtterance('');
+        silentUtterance.volume = 0;
+        window.speechSynthesis.speak(silentUtterance);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.pause();
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+
     setIsSpeaking(false);
 
-    // Immediately abort ESP32 hardware speaker playback
-    api.stopVoice(resetState);
-
-    if (resetState) {
-      onStateChange('idle');
-      api.setLedState('IDLE');
+    let targetState: RobotState = 'idle';
+    if (typeof targetStateOrReset === 'string') {
+      targetState = targetStateOrReset;
+    } else if (targetStateOrReset === false) {
+      targetState = 'idle';
     }
-  }, [onStateChange]);
+
+    // Immediately abort ESP32 hardware speaker playback and synchronize state
+    api.stopVoice(targetState.toUpperCase());
+    onStateChange(targetState);
+    api.setLedState(targetState.toUpperCase());
+  }, [clearAllVoiceTimers, onStateChange]);
 
   // Multi-sentence chunked browser speech (prevents Chrome halting at periods/fullstops)
-  const fallbackBrowserSpeech = useCallback((text: string) => {
+  const fallbackBrowserSpeech = useCallback((text: string, genId?: number) => {
     if (!('speechSynthesis' in window)) return;
+    const currentGen = genId !== undefined ? genId : speechGenerationIdRef.current;
+    if (speechGenerationIdRef.current !== currentGen || isCanceledRef.current) return;
 
-    window.speechSynthesis.cancel();
-    if (speechHeartbeatRef.current) {
-      clearInterval(speechHeartbeatRef.current);
-      speechHeartbeatRef.current = null;
-    }
-    if (chunkWatchdogRef.current) {
-      clearTimeout(chunkWatchdogRef.current);
-      chunkWatchdogRef.current = null;
-    }
-    if (speechWatchdogRef.current) {
-      clearTimeout(speechWatchdogRef.current);
-      speechWatchdogRef.current = null;
-    }
+    clearAllVoiceTimers();
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
 
     let cleanText = text
       .replace(/[*#_`\[\]~|()[\]{}]/g, ' ')
@@ -207,17 +273,17 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Ensure APCOER and institutional acronyms are pronounced letter-by-letter, never as joined words
+    // Preserve clean acronyms without awkward comma breaks in browser speech
     cleanText = cleanText
-      .replace(/\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R['’]s\b/gi, "A, P, C, O, E, R's")
-      .replace(/\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R\b/gi, "A, P, C, O, E, R,")
-      .replace(/\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P['’]s\b/gi, "A, B, M, S, P's")
-      .replace(/\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P\b/gi, "A, B, M, S, P,")
-      .replace(/\bS[-.,\s]?P[-.,\s]?P[-.,\s]?U\b/gi, "S, P, P, U,")
-      .replace(/\bD[-.,\s]?T[-.,\s]?E\b/gi, "D, T, E,")
-      .replace(/\bA[-.,\s]?I[-.,\s]?C[-.,\s]?T[-.,\s]?E\b/gi, "A, I, C, T, E,")
-      .replace(/\bH[-.,\s]?O[-.,\s]?D\b/gi, "H, O, D,")
-      .replace(/\bT[-.,\s]?P[-.,\s]?O\b/gi, "T, P, O,")
+      .replace(/\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R['’]s\b/gi, "APCOER's")
+      .replace(/\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R\b/gi, "APCOER")
+      .replace(/\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P['’]s\b/gi, "ABMSP's")
+      .replace(/\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P\b/gi, "ABMSP")
+      .replace(/\bS[-.,\s]?P[-.,\s]?P[-.,\s]?U\b/gi, "SPPU")
+      .replace(/\bD[-.,\s]?T[-.,\s]?E\b/gi, "DTE")
+      .replace(/\bA[-.,\s]?I[-.,\s]?C[-.,\s]?T[-.,\s]?E\b/gi, "AICTE")
+      .replace(/\bH[-.,\s]?O[-.,\s]?D\b/gi, "HOD")
+      .replace(/\bT[-.,\s]?P[-.,\s]?O\b/gi, "TPO")
       .replace(/,\s*,+/g, ',')
       .replace(/\s+,/g, ',')
       .replace(/,\s*([.!?:;])/g, '$1')
@@ -246,7 +312,6 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
 
     activeUtterancesRef.current = [];
     let currentIndex = 0;
-    let isCanceled = false;
 
     // Trigger SPEAKING state on hardware LED immediately when speech playback starts
     setIsSpeaking(true);
@@ -255,47 +320,39 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
 
     // Chromium keep-alive heartbeat: Prevents speech engine pause after fullstop
     speechHeartbeatRef.current = window.setInterval(() => {
-      if (window.speechSynthesis.paused) {
+      if (window.speechSynthesis.paused && !isCanceledRef.current) {
         window.speechSynthesis.resume();
       }
     }, 3000);
 
     const finishSpeech = () => {
-      if (speechHeartbeatRef.current) {
-        clearInterval(speechHeartbeatRef.current);
-        speechHeartbeatRef.current = null;
-      }
-      if (chunkWatchdogRef.current) {
-        clearTimeout(chunkWatchdogRef.current);
-        chunkWatchdogRef.current = null;
-      }
-      if (speechWatchdogRef.current) {
-        clearTimeout(speechWatchdogRef.current);
-        speechWatchdogRef.current = null;
-      }
+      if (speechGenerationIdRef.current !== currentGen) return;
+      clearAllVoiceTimers();
       activeUtterancesRef.current = [];
       (window as any).__buddy_active_utterance = null;
       setIsSpeaking(false);
       // Clean, smiling transition before returning to idle
       onStateChange('happy');
       api.setLedState('IDLE');
-      setTimeout(() => {
-        onStateChange('idle');
-      }, 1800);
+      transitionTimerRef.current = window.setTimeout(() => {
+        if (speechGenerationIdRef.current === currentGen) {
+          onStateChange('idle');
+          transitionTimerRef.current = null;
+        }
+      }, 1500);
     };
 
     // Overall speech safety timer (prevents speech hanging indefinitely under any circumstance)
     const overallSafetyMs = Math.max(cleanText.length * 200, 15000) + 30000;
     speechWatchdogRef.current = window.setTimeout(() => {
-      if (!isCanceled) {
+      if (!isCanceledRef.current && speechGenerationIdRef.current === currentGen) {
         console.warn("[Browser Speech] Overall speech safety timer triggered, safely finishing.");
-        isCanceled = true;
         finishSpeech();
       }
     }, overallSafetyMs);
 
     const speakChunk = (idx: number) => {
-      if (isCanceled || idx >= sentences.length) {
+      if (isCanceledRef.current || speechGenerationIdRef.current !== currentGen || idx >= sentences.length) {
         finishSpeech();
         return;
       }
@@ -317,8 +374,7 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
         clearTimeout(chunkWatchdogRef.current);
       }
       chunkWatchdogRef.current = window.setTimeout(() => {
-        console.warn(`[Browser Speech] Watchdog timeout for chunk ${idx}, auto-advancing.`);
-        if (!isCanceled) {
+        if (!isCanceledRef.current && speechGenerationIdRef.current === currentGen) {
           currentIndex++;
           speakChunk(currentIndex);
         }
@@ -329,19 +385,19 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
           clearTimeout(chunkWatchdogRef.current);
           chunkWatchdogRef.current = null;
         }
-        if (!isCanceled) {
+        if (!isCanceledRef.current && speechGenerationIdRef.current === currentGen) {
           currentIndex++;
           speakChunk(currentIndex);
         }
       };
 
       utterance.onerror = (e) => {
-        console.warn("[Browser Speech] Chunk speech error:", e);
         if (chunkWatchdogRef.current) {
           clearTimeout(chunkWatchdogRef.current);
           chunkWatchdogRef.current = null;
         }
-        if (!isCanceled) {
+        // Strictly prevent advancing if canceled or interrupted by user
+        if (!isCanceledRef.current && speechGenerationIdRef.current === currentGen && e.error !== 'canceled' && e.error !== 'interrupted') {
           currentIndex++;
           speakChunk(currentIndex);
         }
@@ -351,17 +407,19 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     };
 
     setTimeout(() => {
-      window.speechSynthesis.resume();
-      speakChunk(0);
+      if (!isCanceledRef.current && speechGenerationIdRef.current === currentGen) {
+        window.speechSynthesis.resume();
+        speakChunk(0);
+      }
     }, 50);
-  }, [onStateChange]);
+  }, [clearAllVoiceTimers, onStateChange]);
 
   const isEsp32RecordingRef = useRef(false);
 
   // Start Push-To-Talk Recording
   const startRecording = useCallback(async () => {
-    // Stop any ongoing playback without dropping state to IDLE
-    stopSpeaking(false);
+    // Stop any ongoing playback and immediately sync hardware and UI to 'listening'
+    stopSpeaking('listening');
 
     // Robot Mic (ESP32 INMP441 I2S Digital Mic over Wi-Fi)
     if (audioInputSource === 'robot') {
@@ -513,35 +571,20 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const speak = useCallback(async (text: string, audioUrl?: string) => {
     if (isMuted) return;
 
-    // Stop and clear previous playback without dropping to IDLE state
-    if (eqIntervalRef.current) {
-      clearInterval(eqIntervalRef.current);
-      eqIntervalRef.current = null;
-    }
-    if (speechHeartbeatRef.current) {
-      clearInterval(speechHeartbeatRef.current);
-      speechHeartbeatRef.current = null;
-    }
-    if (audioSafetyTimerRef.current) {
-      clearTimeout(audioSafetyTimerRef.current);
-      audioSafetyTimerRef.current = null;
-    }
-    if (chunkWatchdogRef.current) {
-      clearTimeout(chunkWatchdogRef.current);
-      chunkWatchdogRef.current = null;
-    }
-    if (speechWatchdogRef.current) {
-      clearTimeout(speechWatchdogRef.current);
-      speechWatchdogRef.current = null;
-    }
+    const genId = ++speechGenerationIdRef.current;
+    isCanceledRef.current = false;
+    clearAllVoiceTimers();
+
     activeUtterancesRef.current = [];
     (window as any).__buddy_active_utterance = null;
     if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
+      const a = currentAudioRef.current;
+      a.onplay = null; a.onended = null; a.onerror = null; a.onloadedmetadata = null;
+      try { a.pause(); a.currentTime = 0; a.src = ''; } catch {}
       currentAudioRef.current = null;
     }
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+      try { window.speechSynthesis.cancel(); } catch {}
     }
 
     // Immediately enter SPEAKING state on UI face and hardware LED
@@ -551,11 +594,13 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
 
     // Helper to play WAV/MP3 audio element
     const playAudioUrl = async (url: string) => {
+      if (speechGenerationIdRef.current !== genId || isCanceledRef.current) return;
       const fullUrl = `http://${API_HOST}:8000${url}`;
       const outputTarget = (localStorage.getItem('buddy_audio_output_target') as 'robot' | 'laptop' | 'both') || 'both';
       console.log(`[Voice] Playing audio (${outputTarget} destination):`, fullUrl);
       const audio = new Audio(fullUrl);
-      
+      activeAudiosRef.current.add(audio);
+
       // When 'robot' is selected, mute the local laptop audio element.
       // If 'laptop' or 'both' (default) is selected, play at full volume (1.0).
       audio.volume = outputTarget === 'robot' ? 0.0 : 1.0;
@@ -570,6 +615,7 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
       currentAudioRef.current = audio;
 
       const armSafetyTimer = () => {
+        if (speechGenerationIdRef.current !== genId || isCanceledRef.current) return;
         const durationSec = (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0)
           ? audio.duration
           : Math.max(text.length * 0.20, 8.0);
@@ -580,10 +626,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
           clearTimeout(audioSafetyTimerRef.current);
         }
         audioSafetyTimerRef.current = window.setTimeout(() => {
-          if (currentAudioRef.current === audio && !audio.paused && !audio.ended) {
-            // If audio is actively still progressing, don't interrupt it!
+          if (speechGenerationIdRef.current === genId && currentAudioRef.current === audio && !audio.paused && !audio.ended) {
             if (audio.duration && !isNaN(audio.duration) && audio.currentTime < (audio.duration - 0.75)) {
-              console.log("[Voice] Audio still progressing smoothly, re-arming watchdog.");
               armSafetyTimer();
               return;
             }
@@ -592,17 +636,28 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
             setIsSpeaking(false);
             onStateChange('happy');
             api.setLedState('IDLE');
-            setTimeout(() => onStateChange('idle'), 1800);
+            transitionTimerRef.current = window.setTimeout(() => {
+              if (speechGenerationIdRef.current === genId) {
+                onStateChange('idle');
+                transitionTimerRef.current = null;
+              }
+            }, 1500);
           }
         }, safetyMs);
       };
 
       audio.onloadedmetadata = () => {
-        armSafetyTimer();
+        if (speechGenerationIdRef.current === genId && !isCanceledRef.current) {
+          armSafetyTimer();
+        }
       };
 
       // Audio playback start: Confirm and sustain SPEAKING state
       audio.onplay = () => {
+        if (speechGenerationIdRef.current !== genId || isCanceledRef.current) {
+          audio.pause();
+          return;
+        }
         setIsSpeaking(true);
         onStateChange('speaking');
         api.setLedState('SPEAKING', 0.8);
@@ -611,45 +666,40 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
 
       // Audio playback completion: Transition hardware to IDLE with cheerful happy smile
       audio.onended = () => {
-        if (audioSafetyTimerRef.current) {
-          clearTimeout(audioSafetyTimerRef.current);
-          audioSafetyTimerRef.current = null;
-        }
-        if (eqIntervalRef.current) {
-          clearInterval(eqIntervalRef.current);
-          eqIntervalRef.current = null;
-        }
+        activeAudiosRef.current.delete(audio);
+        if (speechGenerationIdRef.current !== genId) return;
+        clearAllVoiceTimers();
         setIsSpeaking(false);
         currentAudioRef.current = null;
         onStateChange('happy');
         api.setLedState('IDLE');
-        setTimeout(() => {
-          onStateChange('idle');
-        }, 1800);
+        transitionTimerRef.current = window.setTimeout(() => {
+          if (speechGenerationIdRef.current === genId) {
+            onStateChange('idle');
+            transitionTimerRef.current = null;
+          }
+        }, 1500);
       };
 
       audio.onerror = (e) => {
+        activeAudiosRef.current.delete(audio);
+        if (speechGenerationIdRef.current !== genId || isCanceledRef.current) return;
         console.warn("[Voice] Audio element failed to play, switching to browser speech:", e);
-        if (audioSafetyTimerRef.current) {
-          clearTimeout(audioSafetyTimerRef.current);
-          audioSafetyTimerRef.current = null;
-        }
+        clearAllVoiceTimers();
         setIsSpeaking(false);
         onStateChange('idle');
-        fallbackBrowserSpeech(text);
+        fallbackBrowserSpeech(text, genId);
       };
 
       try {
         await audio.play();
       } catch (err) {
+        if (speechGenerationIdRef.current !== genId || isCanceledRef.current) return;
         console.warn("[Voice] audio.play() rejected (autoplay policy), switching to browser speech:", err);
-        if (audioSafetyTimerRef.current) {
-          clearTimeout(audioSafetyTimerRef.current);
-          audioSafetyTimerRef.current = null;
-        }
+        clearAllVoiceTimers();
         setIsSpeaking(false);
         onStateChange('idle');
-        fallbackBrowserSpeech(text);
+        fallbackBrowserSpeech(text, genId);
       }
     };
 
@@ -666,19 +716,22 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     // 2. Asynchronously request synthesis from backend
     try {
       const synthRes = await api.synthesizeSpeech(text);
+      if (speechGenerationIdRef.current !== genId || isCanceledRef.current) {
+        console.log("[Voice] Synthesis resolved after stop was clicked. Ignoring audio.");
+        return;
+      }
       if (synthRes && synthRes.audio_url) {
         console.log("[Voice] Neural audio ready:", synthRes.audio_url);
         await playAudioUrl(synthRes.audio_url);
-        return;
       } else {
-        fallbackBrowserSpeech(text);
-        return;
+        fallbackBrowserSpeech(text, genId);
       }
     } catch (err) {
+      if (speechGenerationIdRef.current !== genId || isCanceledRef.current) return;
       console.warn("Async synthesis request failed, using browser speech fallback:", err);
-      fallbackBrowserSpeech(text);
+      fallbackBrowserSpeech(text, genId);
     }
-  }, [isMuted, stopSpeaking, onStateChange, fallbackBrowserSpeech]);
+  }, [isMuted, clearAllVoiceTimers, onStateChange, fallbackBrowserSpeech]);
 
   const playInstantAcknowledgment = useCallback(() => {
     // Disabled: Prevents premature SPEAKING LED overrides while AI orchestrator is thinking
@@ -688,7 +741,15 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     isRecording,
     isSpeaking,
     isMuted,
-    toggleMute: () => setIsMuted(prev => !prev),
+    toggleMute: () => {
+      setIsMuted(prev => {
+        const next = !prev;
+        if (next) {
+          stopSpeaking('idle');
+        }
+        return next;
+      });
+    },
     startRecording,
     stopRecording,
     stopSpeaking,

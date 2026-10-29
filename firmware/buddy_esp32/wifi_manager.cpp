@@ -383,18 +383,25 @@ void WifiManager::handleStop() {
   LOG_PRINTLN("[Control] Emergency Stop / Interrupt requested.");
   _abortPlayback = true;
   audioOutput.stop();
-  bool resetToIdle = true;
-  if (_server.hasArg("idle") && _server.arg("idle") == "0") {
-    resetToIdle = false;
+
+  BuddyState targetState = STATE_IDLE;
+  if (_server.hasArg("state")) {
+    String st = _server.arg("state");
+    st.toUpperCase();
+    st.trim();
+    if (st == "LISTENING") targetState = STATE_LISTENING;
+    else if (st == "THINKING") targetState = STATE_THINKING;
+    else if (st == "ERROR") targetState = STATE_ERROR;
+    else targetState = STATE_IDLE;
   }
-  if (resetToIdle) {
-    rgbManager.setState(STATE_IDLE);
-    displayManager.setState(STATE_IDLE);
-    displayManager.update();
-    rgbManager.update();
-  }
+
+  rgbManager.setState(targetState);
+  displayManager.setState(targetState);
+  displayManager.update();
+  rgbManager.update();
+
   _server.sendHeader("Access-Control-Allow-Origin", "*");
-  _server.send(200, "application/json", "{\"ok\":true,\"stopped\":true}");
+  _server.send(200, "application/json", "{\"ok\":true,\"stopped\":true,\"state\":\"" + String(buddyStateToString(targetState)) + "\"}");
 }
 
 void WifiManager::update() {

@@ -149,17 +149,17 @@ def extract_spoken_text(text: str, max_chars: int = 1500) -> str:
     clean = re.sub(r'[*#_`>~|()[\]{}]', ' ', clean)
     clean = re.sub(r'\s+', ' ', clean).strip()
 
-    # Letter-by-letter pronunciation normalization for TTS speech synthesis
-    # Ensures "APCOER" is spoken letter-by-letter as "A, P, C, O, E, R" instead of a mumbled/blended pseudo-word
-    clean = re.sub(r"\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R['’]s\b", "A, P, C, O, E, R's", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R\b", "A, P, C, O, E, R,", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P['’]s\b", "A, B, M, S, P's", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P\b", "A, B, M, S, P,", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bS[-.,\s]?P[-.,\s]?P[-.,\s]?U\b", "S, P, P, U,", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bD[-.,\s]?T[-.,\s]?E\b", "D, T, E,", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bA[-.,\s]?I[-.,\s]?C[-.,\s]?T[-.,\s]?E\b", "A, I, C, T, E,", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bH[-.,\s]?O[-.,\s]?D\b", "H, O, D,", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\bT[-.,\s]?P[-.,\s]?O\b", "T, P, O,", clean, flags=re.IGNORECASE)
+    # Pronunciation normalization for TTS speech synthesis:
+    # Preserve clean spoken acronyms without robotic comma-separated pauses
+    clean = re.sub(r"\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R['’]s\b", "APCOER's", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?P[-.,\s]?C[-.,\s]?O[-.,\s]?E[-.,\s]?R\b", "APCOER", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P['’]s\b", "ABMSP's", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?B[-.,\s]?M[-.,\s]?S[-.,\s]?P\b", "ABMSP", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bS[-.,\s]?P[-.,\s]?P[-.,\s]?U\b", "SPPU", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bD[-.,\s]?T[-.,\s]?E\b", "DTE", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bA[-.,\s]?I[-.,\s]?C[-.,\s]?T[-.,\s]?E\b", "AICTE", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bH[-.,\s]?O[-.,\s]?D\b", "HOD", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\bT[-.,\s]?P[-.,\s]?O\b", "TPO", clean, flags=re.IGNORECASE)
 
     # Sanitize any accidental duplicate commas, whitespace before commas, or commas before punctuation
     clean = re.sub(r',\s*,+', ',', clean)

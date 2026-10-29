@@ -1,7 +1,13 @@
+"""
+BUDDY AI 2.0 — College Document Retrieval Service
+Provides keyword extraction, relevance scoring, and hybrid search integration.
+"""
+
 import re
 from typing import List, Dict, Any, Optional
 from ..database.repository import repo
 from ..database.models import CitationModel
+from .hybrid_retrieval import hybrid_search, build_citations
 
 
 STOP_WORDS = {
@@ -34,10 +40,26 @@ def calculate_score(query_terms: List[str], text: str) -> float:
 
 def search_documents(query: str, top_k: int = 3, threshold: float = 0.25) -> List[Dict[str, Any]]:
     """
-    Searches indexed college documents.
+    Searches indexed college documents using hybrid retrieval (SQL + FTS5 + Vector).
+    Falls back to keyword chunk search if hybrid results are empty.
     Returns ranked passages with citations and page numbers.
     Never invents citations if no relevant passage exists.
     """
+    # Try hybrid search first
+    hybrid_res = hybrid_search(query, top_k=top_k, use_sql=False, use_fts=True, use_vector=True)
+    if hybrid_res:
+        formatted_hybrid = []
+        for r in hybrid_res:
+            formatted_hybrid.append({
+                "source": r["source"],
+                "page": r.get("page", 1),
+                "section": r.get("section", "General"),
+                "relevance_score": r.get("relevance_score", 0.8),
+                "content": r["content"]
+            })
+        return formatted_hybrid[:top_k]
+
+    # Keyword fallback
     terms = extract_keywords(query)
     if not terms:
         return []
@@ -56,23 +78,10 @@ def search_documents(query: str, top_k: int = 3, threshold: float = 0.25) -> Lis
                 "content": chunk["content"]
             })
 
-    # Sort descending by relevance score
     scored_results.sort(key=lambda x: x["relevance_score"], reverse=True)
     return scored_results[:top_k]
 
 
 def format_citations(retrieval_results: List[Dict[str, Any]]) -> List[CitationModel]:
     """Converts retrieval results into CitationModel instances."""
-    citations = []
-    for res in retrieval_results:
-        snippet = res["content"]
-        if len(snippet) > 200:
-            snippet = snippet[:197] + "..."
-        citations.append(CitationModel(
-            source=res["source"],
-            page=res.get("page"),
-            section=res.get("section"),
-            relevance_score=res.get("relevance_score"),
-            snippet=snippet
-        ))
-    return citations
+    return build_citations(retrieval_results)

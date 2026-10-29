@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { RobotState, ChatMessage, HealthStatus, AppConfig } from './types';
 import { api } from './services/api';
 import { useVoice } from './hooks/useVoice';
@@ -64,6 +64,27 @@ export const App: React.FC = () => {
     };
   }, [refreshSystemData]);
 
+  // Managed status timer to prevent dangling transitions
+  const statusTimerRef = useRef<number | null>(null);
+
+  const clearStatusTimer = useCallback(() => {
+    if (statusTimerRef.current) {
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
+  }, []);
+
+  const setTimedState = useCallback((state: RobotState, text: string, durationMs: number = 2500) => {
+    clearStatusTimer();
+    setRobotState(state);
+    setStatusText(text);
+    statusTimerRef.current = window.setTimeout(() => {
+      setRobotState('idle');
+      setStatusText('');
+      statusTimerRef.current = null;
+    }, durationMs);
+  }, [clearStatusTimer]);
+
   // Voice Interaction Hook
   const {
     isRecording,
@@ -88,12 +109,11 @@ export const App: React.FC = () => {
       handleSendMessage(text);
     },
     onStateChange: (newState) => {
+      clearStatusTimer();
       setRobotState(newState as RobotState);
     },
     onError: (errMessage) => {
-      setStatusText(errMessage);
-      setRobotState('error');
-      setTimeout(() => setRobotState('idle'), 4000);
+      setTimedState('error', errMessage, 4000);
     }
   });
 
@@ -103,7 +123,8 @@ export const App: React.FC = () => {
     if (!trimmed) return;
 
     setInputText('');
-    stopSpeaking(false);
+    clearStatusTimer();
+    stopSpeaking('thinking');
 
     const userMsg: ChatMessage = {
       id: 'usr_' + Date.now(),
@@ -118,7 +139,7 @@ export const App: React.FC = () => {
     setStatusText("Consulting college records & documents...");
 
     try {
-      const res = await api.sendChatMessage(trimmed, sessionId);
+      const res = await api.sendChatMessage(trimmed, sessionId, audioOutputTarget);
 
       const botMsg: ChatMessage = {
         id: 'bot_' + Date.now(),
@@ -135,32 +156,36 @@ export const App: React.FC = () => {
       if (res.tts && res.tts.enabled) {
         speak(res.response, res.tts.audio_url);
       } else {
-        setRobotState('happy');
-        setStatusText("Here is what I found!");
+        setTimedState('happy', "Here is what I found!", 2000);
         api.setLedState('IDLE');
-        setTimeout(() => {
-          setRobotState('idle');
-          setStatusText('');
-        }, 2000);
       }
     } catch (err: any) {
-      setRobotState('error');
+      setTimedState('error', err.message || "Failed to reach Buddy backend.", 4000);
       api.setLedState('ERROR');
-      setStatusText(err.message || "Failed to reach Buddy backend.");
-      setTimeout(() => {
-        setRobotState('idle');
-        api.setLedState('IDLE');
-        setStatusText('');
-      }, 4000);
     }
   };
 
   const handleClearSession = () => {
+    clearStatusTimer();
+    stopSpeaking('idle');
     setMessages([]);
     setSessionId('sess_' + Math.random().toString(36).substring(2, 9));
     setRobotState('idle');
     setStatusText('');
   };
+
+  // Global Escape key shortcut to immediately silence Buddy
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isSpeaking || robotState === 'speaking') {
+          stopSpeaking('idle');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSpeaking, robotState, stopSpeaking]);
 
   return (
     <div style={{
@@ -243,8 +268,16 @@ export const App: React.FC = () => {
         padding: '10px 24px 16px 24px',
         overflowY: 'auto'
       }}>
-        {/* Animated Robot Face */}
-        <div style={{ margin: 'auto 0 0 0' }}>
+        {/* Animated Robot Face (click face to silence) */}
+        <div
+          style={{ margin: 'auto 0 0 0', cursor: (isSpeaking || robotState === 'speaking') ? 'pointer' : 'default' }}
+          onClick={() => {
+            if (isSpeaking || robotState === 'speaking') {
+              stopSpeaking('idle');
+            }
+          }}
+          title={(isSpeaking || robotState === 'speaking') ? "Click face to stop Buddy talking immediately" : undefined}
+        >
           <RobotFace state={robotState} />
           <StatusIndicator state={robotState} customMessage={statusText} />
         </div>
@@ -258,10 +291,11 @@ export const App: React.FC = () => {
         <VoiceControls
           isRecording={isRecording}
           isSpeaking={isSpeaking}
+          robotState={robotState}
           isMuted={isMuted}
           onStartRecord={startRecording}
           onStopRecord={stopRecording}
-          onStopSpeaking={() => stopSpeaking(true)}
+          onStopSpeaking={() => stopSpeaking('idle')}
           onToggleMute={toggleMute}
           activeMicLabel={activeMicLabel}
           onOpenSettings={() => setIsSettingsOpen(true)}

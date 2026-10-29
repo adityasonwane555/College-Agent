@@ -112,6 +112,10 @@ void DisplayManager::begin() {
 void DisplayManager::setState(BuddyState state) {
   if (_currentState != state) {
     _currentState = state;
+    // Clear transient emotions on any explicit state transition
+    if (_messageTitle == "happy") {
+      _messageTitle = "";
+    }
     _stateStartTime = millis();
     _lastEyeH = -1; // Force immediate eye redraw with new state color
     _lastAnimUpdate = 0; // Force immediate redraw on the very next update() call

@@ -34,11 +34,16 @@ export const api = {
     return res.json();
   },
 
-  async sendChatMessage(message: string, sessionId?: string): Promise<ChatApiResponse> {
+  async sendChatMessage(message: string, sessionId?: string, audioOutputTarget?: string): Promise<ChatApiResponse> {
+    const target = audioOutputTarget || (typeof window !== 'undefined' ? localStorage.getItem('buddy_audio_output_target') || 'both' : 'both');
     const res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, session_id: sessionId })
+      body: JSON.stringify({
+        message,
+        session_id: sessionId,
+        audio_output_target: target
+      })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -102,10 +107,10 @@ export const api = {
     }
   },
 
-  async stopVoice(resetState: boolean = true): Promise<{ ok: boolean }> {
+  async stopVoice(targetState: string = 'IDLE'): Promise<{ ok: boolean }> {
     try {
-      const isReset = resetState === true;
-      const res = await fetch(`${API_BASE}/hardware/stop-voice?reset_state=${isReset}`, { method: 'POST' });
+      const stateParam = encodeURIComponent(targetState);
+      const res = await fetch(`${API_BASE}/hardware/stop-voice?target_state=${stateParam}`, { method: 'POST' });
       return res.json();
     } catch {
       return { ok: false };
@@ -225,6 +230,49 @@ export const api = {
       body: JSON.stringify(event)
     });
     if (!res.ok) throw new Error('Failed to save event');
+    return res.json();
+  },
+
+  async listPendingUpdates(token: string) {
+    const res = await fetch(`${API_BASE}/admin/knowledge/pending`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load pending updates');
+    return res.json();
+  },
+
+  async approvePendingUpdate(id: number, token: string) {
+    const res = await fetch(`${API_BASE}/admin/knowledge/approve/${id}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to approve update');
+    return res.json();
+  },
+
+  async rejectPendingUpdate(id: number, token: string) {
+    const res = await fetch(`${API_BASE}/admin/knowledge/reject/${id}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to reject update');
+    return res.json();
+  },
+
+  async rebuildIndexes(token: string) {
+    const res = await fetch(`${API_BASE}/admin/indexes/rebuild`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to rebuild indexes');
+    return res.json();
+  },
+
+  async getDiagnostics(token: string) {
+    const res = await fetch(`${API_BASE}/admin/diagnostics`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to fetch diagnostics');
     return res.json();
   }
 };
