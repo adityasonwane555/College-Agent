@@ -1,3 +1,9 @@
+/**
+ * BUDDY AI — useVoice Custom React Hook
+ * Manages audio lifecycle, dual-microphone routing (ESP32 INMP441 vs local device),
+ * speech recognition transcription, speech synthesis playback, and active cancellation.
+ */
+
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { api, API_HOST } from '../services/api';
 import type { RobotState } from '../types';
