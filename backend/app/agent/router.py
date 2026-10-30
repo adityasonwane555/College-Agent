@@ -2,6 +2,8 @@
 BUDDY AI 2.0 — Adaptive Multi-Model Router & Offline Intelligence
 Routes queries based on intent, measured availability, and offline status.
 Guarantees fast offline response without waiting on cloud timeouts.
+Implements pronoun reference resolution, contextual query enrichment,
+and seamless failover across Gemini, Groq, Ollama, and local knowledge stores.
 """
 
 from enum import Enum
