@@ -80,6 +80,10 @@ bool AudioOutput::begin(uint32_t sampleRate) {
   return true;
 }
 
+/**
+ * Immediately clears the I2S1 DMA transmit buffers to halt audio playback without delay.
+ * Prevents audio reverberation or lingering syllables when the user requests a stop command.
+ */
 void AudioOutput::stop() {
   if (_isInitialized) {
     i2s_zero_dma_buffer(I2S_NUM_1);
