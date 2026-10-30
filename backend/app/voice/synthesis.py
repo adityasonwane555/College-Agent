@@ -1,3 +1,10 @@
+"""
+BUDDY AI — Neural Text-to-Speech & Speech Synthesis Subsystem
+Provides multi-engine speech generation supporting Fish Audio Cloud API,
+local persistent s2.cpp high-fidelity voice cloning, and zero-GPU Edge-TTS fallback.
+Includes audio format normalization, float32-to-PCM16 conversion, and pronunciation cleaning.
+"""
+
 import os
 import re
 import sys
