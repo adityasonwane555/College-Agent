@@ -1,3 +1,9 @@
+"""
+BUDDY AI — Conversational Agent Orchestrator
+Coordinates multi-turn dialogue memory, real-time Google Gemini web research,
+adaptive hybrid RAG routing, tool calling, and grounded citation synthesis.
+"""
+
 import json
 import uuid
 from typing import Dict, Any, List, Optional
