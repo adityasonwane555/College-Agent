@@ -1,3 +1,9 @@
+/**
+ * BUDDY AI — Conversation Panel Component
+ * Displays interactive chat dialogue, dynamic citation pills (web vs institutional),
+ * source snippet inspection drawers, and automatic scroll-to-bottom mechanics.
+ */
+
 import React, { useRef, useEffect, useState } from 'react';
 import type { ChatMessage } from '../types';
 import { BookOpen, User, Bot, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
