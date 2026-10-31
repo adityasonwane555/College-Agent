@@ -1,3 +1,9 @@
+"""
+BUDDY AI — SQLite Database Repository & Institutional Data Store
+Manages structured college records, SQLite FTS5 full-text indices,
+chunk vector persistence, document versioning, and pending lifecycle approvals.
+"""
+
 import sqlite3
 from typing import List, Optional, Dict, Any
 from pathlib import Path
