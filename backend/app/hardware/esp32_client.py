@@ -33,7 +33,10 @@ class ESP32Client:
         self._active_stream_client: Optional[httpx.Client] = None
 
     def check_health(self) -> Dict[str, Any]:
-        """Pings the ESP32 /health endpoint."""
+        """
+        Polls the ESP32-S3 /health endpoint to verify network reachability,
+        WiFi signal strength (RSSI), battery voltage, and free heap memory.
+        """
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.get(f"{self.base_url}/health")
