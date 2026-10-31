@@ -45,6 +45,14 @@ int8_t WifiManager::getRssi() const {
   return isConnected() ? WiFi.RSSI() : -100;
 }
 
+/**
+ * Registers all REST API routes on the ESP32-S3 HTTP WebServer:
+ * - /api/health: Reports system uptime, WiFi RSSI, and heap memory
+ * - /api/state: Receives robot states (THINKING, SPEAKING, LISTENING, ERROR, IDLE)
+ * - /api/speaker/stream: Accepts binary chunked audio for MAX98357A I2S1 playback
+ * - /api/mic/record: Captures INMP441 I2S0 microphone audio for PC transcription
+ * - /api/stop: Immediately halts audio streaming and clears I2S DMA buffers
+ */
 void WifiManager::setupRoutes() {
   _server.on("/health", HTTP_GET, [this]() { handleHealth(); });
   _server.on("/api/health", HTTP_GET, [this]() { handleHealth(); });
