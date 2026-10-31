@@ -191,8 +191,9 @@ def hybrid_search(
     use_vector: bool = True
 ) -> List[Dict[str, Any]]:
     """
-    Executes hybrid retrieval across SQL structured tables, FTS5 keyword index,
-    and semantic vector store. Applies Reciprocal Rank Fusion (RRF) to merge candidates.
+    Executes three-way hybrid retrieval across SQL structured tables, SQLite FTS5 keyword index,
+    and local semantic vector embeddings. Applies Reciprocal Rank Fusion (RRF) with authoritative
+    weight boosting to eliminate hallucinations and synthesize grounded institutional answers.
     """
     candidates: Dict[str, Dict[str, Any]] = {}
 
