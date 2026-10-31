@@ -34,7 +34,11 @@ class UnifiedModelResponse(BaseModel):
 
 
 class UnifiedProviderManager:
-    """Manages multi-provider availability, failure tracking, and health checks."""
+    """
+    Manages multi-provider availability, circuit-breaker fault tolerance, and health tracking.
+    Automatically trips circuit breakers on repeated cloud failures and coordinates failover
+    between Google Gemini, Groq Cloud AI, and local GPU-accelerated Ollama.
+    """
     def __init__(self):
         self.health_cache: Dict[str, ProviderHealth] = {}
         self.circuit_breakers: Dict[str, float] = {
