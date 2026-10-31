@@ -28,6 +28,10 @@ class LocalMultilingualVectorizer:
         self.dimensions = dimensions
 
     def embed_text(self, text: str) -> List[float]:
+        """
+        Generates dense vector embeddings using word and character n-gram hashing.
+        Applies L2 normalization to enable fast cosine similarity via dot product.
+        """
         vec = np.zeros(self.dimensions, dtype=np.float32)
         if not text or not text.strip():
             return vec.tolist()
