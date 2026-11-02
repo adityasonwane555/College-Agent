@@ -109,6 +109,10 @@ void DisplayManager::begin() {
   LOG_PRINTLN("[Display] ST7789 Hardware SPI @ 40MHz initialized: Flicker-free Dual-Buffer Active.");
 }
 
+/**
+ * Transitions the robot face to a new operational state (IDLE, LISTENING, THINKING, SPEAKING, ERROR).
+ * Resets animation timers and invalidates eye and mouth cache to trigger an immediate zero-flicker redraw.
+ */
 void DisplayManager::setState(BuddyState state) {
   if (_currentState != state) {
     _currentState = state;
