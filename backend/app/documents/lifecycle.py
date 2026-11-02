@@ -19,6 +19,10 @@ from ..security.file_validation import calculate_file_hash, sanitize_filename, v
 
 
 class KnowledgeLifecycleManager:
+    """
+    Orchestrates document ingestion pipelines, duplicate detection, content diffing,
+    and human-in-the-loop review approvals for authoritative college knowledge bases.
+    """
     def __init__(self, default_auto_approve: bool = False):
         self.default_auto_approve = default_auto_approve
 
