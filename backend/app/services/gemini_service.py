@@ -20,7 +20,10 @@ _gemini_rate_limited_until = 0.0
 
 
 def is_gemini_available() -> bool:
-    """Checks if Gemini is configured, enabled, and not currently cooling down from a rate limit."""
+    """
+    Evaluates Google Gemini availability, API key provisioning, and circuit breaker rate-limit backoff.
+    Returns True only when the service is fully configured and ready for low-latency inference.
+    """
     global _gemini_rate_limited_until
     if time.time() < _gemini_rate_limited_until:
         return False
