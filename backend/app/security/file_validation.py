@@ -51,7 +51,10 @@ def calculate_file_hash(data_or_path: bytes | Path | str) -> str:
 
 
 def sanitize_filename(filename: str) -> str:
-    """Strips path traversal components and normalizes filename."""
+    """
+    Sanitizes and normalizes an uploaded file's basename to prevent directory traversal
+    and filesystem exploits. Strips null bytes, backslashes, and invalid characters.
+    """
     base = os.path.basename(filename).strip()
     safe_name = re.sub(r'[^a-zA-Z0-9_\.\-]', '_', base)
     if not safe_name or safe_name.startswith('.'):
