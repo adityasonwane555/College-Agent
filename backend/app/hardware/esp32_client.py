@@ -101,6 +101,8 @@ class ESP32Client:
         Decodes any audio file (MP3, WAV, etc.) into 16-bit mono PCM and streams it
         directly to the ESP32 MAX98357A speaker over Wi-Fi.
         """
+        if time.time() - getattr(self, "_last_speaker_fail", 0.0) < 20.0:
+            return False
         try:
             raw_pcm = b""
             # Use PyAV for universal audio decoding (MP3 from edge-tts, WAV from Fish Audio, etc.)
@@ -154,6 +156,7 @@ class ESP32Client:
                 except Exception:
                     pass
         except Exception as e:
+            self._last_speaker_fail = time.time()
             logger.warning(f"Failed to stream audio to ESP32 speaker: {e}")
             return False
 

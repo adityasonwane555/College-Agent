@@ -136,7 +136,7 @@ def transcribe_audio_file(file_path: Path) -> Dict[str, Any]:
         segments, info = model.transcribe(
             str(file_path),
             language=settings.STT_LANGUAGE if settings.STT_LANGUAGE != "auto" else None,
-            beam_size=5,
+            beam_size=1, condition_on_previous_text=False,
             temperature=0.0,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=400)
@@ -162,7 +162,7 @@ def transcribe_audio_file(file_path: Path) -> Dict[str, Any]:
                 segments, info = cpu_model.transcribe(
                     str(file_path),
                     language=settings.STT_LANGUAGE if settings.STT_LANGUAGE != "auto" else None,
-                    beam_size=3,
+                    beam_size=1, condition_on_previous_text=False,
                     temperature=0.0,
                     vad_filter=True,
                     vad_parameters=dict(min_silence_duration_ms=400)
