@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:3b"
     OLLAMA_TIMEOUT_SECONDS: float = 60.0
-    USE_LOCAL_LLM_FIRST: bool = True
-    ENABLE_FAST_PATH: bool = False
+    USE_LOCAL_LLM_FIRST: bool = False
+    ENABLE_FAST_PATH: bool = True
 
     # Google Gemini Cloud AI Integration (Online Information Extraction & Web Research)
     GEMINI_API_KEY: str = ""
@@ -60,7 +60,8 @@ class Settings(BaseSettings):
 
     # Text to Speech (edge_tts, fish_audio_api, or local fish_audio)
     TTS_ENABLED: bool = True
-    TTS_ENGINE: str = "fish_audio_api"
+    TTS_ASYNC_RESPONSE: bool = False
+    TTS_ENGINE: str = "edge_tts"
     EDGE_TTS_VOICE: str = "en-US-AnaNeural"
     FISH_AUDIO_API_KEY: str = ""
     FISH_AUDIO_MODEL: str = "s2.1-pro-free"

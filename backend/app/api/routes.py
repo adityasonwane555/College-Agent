@@ -135,7 +135,7 @@ async def chat_endpoint(req: ChatRequest, background_tasks: BackgroundTasks):
         "engine": getattr(settings, "TTS_ENGINE", "edge_tts"),
         "audio_url": None
     }
-    if settings.TTS_ENABLED:
+    if settings.TTS_ENABLED and not getattr(settings, "TTS_ASYNC_RESPONSE", False):
         try:
             synth = synthesize_speech(result["response"])
             if synth.get("enabled") and synth.get("audio_url"):
