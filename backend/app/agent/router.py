@@ -146,7 +146,15 @@ class AdaptiveRouter:
 
             retrieved = hybrid_search(resolved_search_query, top_k=4, use_sql=True, use_fts=True, use_vector=True)
             if retrieved:
-                if retrieved[0].get("section") == "Faculty Directory Verification":
+                if "No faculty member named" in retrieved[0].get("content", ""):
+                    return {
+                        "response": retrieved[0]["content"],
+                        "citations": build_citations([retrieved[0]]),
+                        "provider": "local_authoritative_sql",
+                        "intent": intent.value,
+                        "is_offline": is_offline
+                    }
+                elif retrieved[0].get("section") == "Faculty Directory Verification":
                     retrieved = [retrieved[0]]
                 elif "Faculty Directory" in retrieved[0].get("source", ""):
                     retrieved = [r for r in retrieved if "Faculty Directory" in r.get("source", "") or "Department" in r.get("source", "")]
@@ -162,7 +170,7 @@ class AdaptiveRouter:
                     {"role": "system", "content": (
                         "You are Buddy, a helpful, intelligent, and natural conversational AI assistant with institutional knowledge of APCOER Pune. "
                         "Answer the user's question directly, accurately, politely, and concisely using the verified facts provided below. "
-                        "Do not invent dates, venues, or deadlines. Present departments, lists, and institutional heritage clearly and naturally. "
+                        "Do not invent dates, venues, or deadlines. If a requested faculty member is not listed in verified facts, clearly state that they could not be found in college records. Present departments, lists, and institutional heritage clearly and naturally. "
                         "Do NOT use repetitive scripted receptionist introductions or forced greetings. "
                         "Maintain continuity with preceding conversation turns."
                     )}
@@ -181,12 +189,12 @@ class AdaptiveRouter:
                     "content": f"Verified Knowledge:\n{evidence_text}\n\nUser Question: {query}"
                 })
 
-                # Synthesize with best available provider: Gemini -> Groq -> Ollama
+                # Synthesize with best available provider: Groq (ultra-fast) -> Gemini -> Ollama
                 providers_to_try = []
-                if not is_offline and health["gemini"].is_available:
-                    providers_to_try.append("gemini")
                 if not is_offline and health["groq"].is_available:
                     providers_to_try.append("groq")
+                if not is_offline and health["gemini"].is_available:
+                    providers_to_try.append("gemini")
                 if health["ollama"].is_available:
                     providers_to_try.append("ollama")
 
@@ -227,8 +235,38 @@ class AdaptiveRouter:
         # 4. General Knowledge / Technical Concepts
         if intent == QueryIntent.GENERAL_KNOWLEDGE:
             if not is_offline:
-                # Online: Return None so orchestrator can handle via Google Gemini Web Research or Groq
-                return None
+                providers_to_try = []
+                if health["groq"].is_available:
+                    providers_to_try.append("groq")
+                if health["gemini"].is_available:
+                    providers_to_try.append("gemini")
+
+                system_instruction = (
+                    "You are Buddy, a helpful, intelligent, and natural conversational AI assistant. "
+                    "Answer the user's question directly, accurately, and concisely."
+                )
+                prompt_msgs = [{"role": "system", "content": system_instruction}]
+                if session_history:
+                    for turn in session_history:
+                        r = turn.get("role")
+                        c = turn.get("content", "")
+                        if r in ("user", "assistant") and c and c != query:
+                            prompt_msgs.append({"role": r, "content": c})
+                prompt_msgs.append({"role": "user", "content": query})
+
+                for prov in providers_to_try:
+                    try:
+                        res = await provider_manager.call_provider(prov, prompt_msgs)
+                        if res and res.content and len(res.content.strip()) > 0:
+                            return {
+                                "response": res.content.strip(),
+                                "citations": [],
+                                "provider": f"{prov}_direct",
+                                "intent": intent.value,
+                                "is_offline": False
+                            }
+                    except Exception as e:
+                        print(f"[AdaptiveRouter] {prov} direct general knowledge error: {e}")
 
             # If offline, use Ollama exclusively
             if health["ollama"].is_available:
