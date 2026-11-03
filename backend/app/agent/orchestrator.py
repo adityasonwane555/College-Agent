@@ -20,7 +20,7 @@ from .grounding import verify_response_grounding
 
 
 def is_web_or_research_query(query: str) -> bool:
-    """Detects if user is asking for web research, live internet search, or external world facts."""
+    """Detects if user is asking for live web research or real-time internet search."""
     q = query.lower().strip()
 
     # If the question contains college context, it is not an external web query
@@ -34,26 +34,16 @@ def is_web_or_research_query(query: str) -> bool:
     if any(k in q for k in college_keywords):
         return False
 
-    web_keywords = [
+    # Live external search indicators
+    live_web_keywords = [
         "search the web", "search internet", "search online", "look up online",
-        "google", "browse the web", "web search", "internet search", "on the web",
+        "browse the web", "web search", "internet search", "on the web",
         "find online", "research online", "latest news", "current weather", "today's news",
-        "who is", "who was", "who won", "what happened", "stock price", "current price",
-        "news about", "weather in", "latest updates", "recent events", "president of",
-        "prime minister of", "capital of", "who wrote", "who painted", "who directed"
+        "who won yesterday", "what happened today", "stock price", "current price",
+        "news about", "weather in", "latest updates", "recent events",
+        "live score", "current live news", "breaking news"
     ]
-    if any(k in q for k in web_keywords):
-        return True
-
-    research_indicators = [
-        "research", "explain", "compare", "how does", "what is", "why is",
-        "tell me about", "history of", "future of", "technology trends", "who invented",
-        "which is", "where is", "when did", "how to"
-    ]
-    if any(q.startswith(ri) or f" {ri} " in q for ri in research_indicators):
-        return True
-
-    return True
+    return any(k in q for k in live_web_keywords)
 
 
 class SessionManager:
@@ -168,19 +158,7 @@ class AgentOrchestrator:
 
             assistant_msg = None
 
-            # Priority 1: Google Gemini Cloud AI for Web Questions, Online Extraction, or Cloud Reasoning
-            if use_gemini and (is_web_research or not getattr(settings, "USE_LOCAL_LLM_FIRST", True)):
-                try:
-                    assistant_msg = await call_gemini_chat(
-                        messages=history,
-                        tools=OLLAMA_TOOLS_SCHEMA
-                    )
-                except Exception as e:
-                    print(f"[Orchestrator] Gemini chat error: {e}, attempting Groq fallback...")
-                    use_gemini = False
-                    assistant_msg = None
-
-            # Priority 2: Groq Cloud AI for Web-Based Questions / Deep Research Fallback
+            # Priority 1: High-Speed Groq Cloud AI (LPU acceleration for sub-second responses)
             if not assistant_msg and use_groq and (is_web_research or not getattr(settings, "USE_LOCAL_LLM_FIRST", True)):
                 try:
                     assistant_msg = await call_groq_chat(
@@ -188,7 +166,19 @@ class AgentOrchestrator:
                         tools=OLLAMA_TOOLS_SCHEMA
                     )
                 except Exception as e:
-                    print(f"[Orchestrator] Groq web/research error: {e}, attempting Ollama fallback...")
+                    print(f"[Orchestrator] Groq chat error: {e}, attempting Gemini fallback...")
+                    assistant_msg = None
+
+            # Priority 2: Google Gemini Cloud AI
+            if not assistant_msg and use_gemini and (is_web_research or not getattr(settings, "USE_LOCAL_LLM_FIRST", True)):
+                try:
+                    assistant_msg = await call_gemini_chat(
+                        messages=history,
+                        tools=OLLAMA_TOOLS_SCHEMA
+                    )
+                except Exception as e:
+                    print(f"[Orchestrator] Gemini chat error: {e}, attempting Ollama fallback...")
+                    use_gemini = False
                     assistant_msg = None
 
             # Priority 3: Local Ollama Model (qwen2.5:3b on GPU) for college campus queries

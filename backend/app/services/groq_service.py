@@ -39,6 +39,7 @@ def _clean_reasoning_tags(text: str) -> str:
     if not text:
         return ""
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    cleaned = re.sub(r"[\u202f\u00a0\u2000-\u200b]", " ", cleaned)
     return cleaned.strip()
 
 
