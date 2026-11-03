@@ -108,7 +108,7 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
         "rankhambe", "devika", "lavhe", "ramesh", "kokane", "sayali", "kalal", "ashok", "nikam", "rajshri", "dodke", "akash", "dipalee", "shah", "khaire", "prajakta", "khote", "shital", "ajinkya", "patil"
     ]):
         # Computer Engineering
-        if "computer" in clean or "cs" in clean or "comp" in clean or "gaikwad" in clean or "rama" in clean:
+        if "computer" in clean or _word_in_clean("cs", clean) or "comp" in clean or "gaikwad" in clean or "rama" in clean:
             return {
                 "response": (
                     "The Head of the Computer Engineering Department is Dr. Rama B. Gaikwad! "
@@ -312,7 +312,7 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
             }
 
         # First Year Engineering (FE)
-        if "first year" in clean or "fe" in clean or "selukar" in clean or "balaji" in clean:
+        if "first year" in clean or _word_in_clean("fe", clean) or "selukar" in clean or "balaji" in clean:
             return {
                 "response": (
                     "The Head of the First Year Engineering (Applied Science) Department is Dr. Balaji S. Selukar! "
