@@ -120,7 +120,7 @@ class RGBController:
         if treble is not None:
             body["treble"] = round(treble, 2)
 
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", "Connection": "close"}
         if self.token:
             headers["Authorization"] = self.token
 
@@ -142,6 +142,13 @@ class RGBController:
             self.is_connected = False
             self.last_error = str(e)
             logger.debug("[RGBController] Could not reach ESP32 at %s: %s", url, e)
+            # Synchronize base_url if esp32_client auto-discovered a new IP address
+            try:
+                from .esp32_client import esp32_client
+                if esp32_client.base_url != self.base_url and esp32_client.is_connected:
+                    self.base_url = esp32_client.base_url
+            except Exception:
+                pass
             return False
 
     def normalize_state(self, state: str) -> str:
@@ -232,6 +239,17 @@ class RGBController:
                 else:
                     return {"ok": False, "message": f"ESP32 returned status {resp.status_code}"}
         except Exception as e:
+            # Try auto-discovery via esp32_client
+            try:
+                from .esp32_client import esp32_client
+                health = esp32_client.check_health()
+                if esp32_client.is_connected:
+                    self.base_url = esp32_client.base_url
+                    self.is_connected = True
+                    self.last_contact_time = time.time()
+                    return {"ok": True, "device_data": health, "message": f"Successfully connected to ESP32 at {self.base_url}"}
+            except Exception:
+                pass
             self.is_connected = False
             return {"ok": False, "message": f"Cannot reach ESP32 at {self.base_url}: {e}"}
 
