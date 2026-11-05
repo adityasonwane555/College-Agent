@@ -1,10 +1,20 @@
 /*
  * =====================================================================================
- * BUDDY AI — Wi-Fi & WebServer Manager Implementation
+ * BUDDY AI — Wi-Fi, WebServer & mDNS Manager Implementation
+ * 
+ * Hardware & Architecture Features:
+ *   - Wi-Fi STA connection with auto-reconnection across all disconnected states
+ *   - Multicast DNS (mDNS) responder: resolves automatically to http://buddy.local/
+ *   - Synchronous HTTP REST API server on Port 80 (health, states, display, chimes)
+ *   - Low-latency binary PCM audio streaming (/api/speak/raw) for MAX98357A I2S amplifier
+ *   - Off-screen ST7789 display & WS2812 LED animation rate-limiting (40 FPS) to prevent
+ *     SPI bus contention with incoming TCP audio buffers
+ *   - Explicit "Connection: close" HTTP response headers to prevent socket exhaustion
  * =====================================================================================
  */
 
 #include "wifi_manager.h"
+#include <ESPmDNS.h>
 #include "rgb_manager.h"
 #include "display_manager.h"
 #include "audio_output.h"
@@ -103,6 +113,7 @@ void WifiManager::handleHealth() {
   json += "}";
 
   _server.sendHeader("Access-Control-Allow-Origin", "*");
+  _server.sendHeader("Connection", "close");
   _server.send(200, "application/json", json);
 }
 
@@ -179,6 +190,7 @@ void WifiManager::handleState() {
   rgbManager.update();
 
   _server.sendHeader("Access-Control-Allow-Origin", "*");
+  _server.sendHeader("Connection", "close");
   _server.send(200, "application/json", "{\"ok\":true,\"state\":\"" + String(buddyStateToString(targetState)) + "\"}");
 }
 
@@ -192,12 +204,14 @@ void WifiManager::handleDisplay() {
   displayManager.setMessage(title, body);
 
   _server.sendHeader("Access-Control-Allow-Origin", "*");
+  _server.sendHeader("Connection", "close");
   _server.send(200, "application/json", "{\"ok\":true}");
 }
 
 void WifiManager::handleChime() {
   audioOutput.playChime();
   _server.sendHeader("Access-Control-Allow-Origin", "*");
+  _server.sendHeader("Connection", "close");
   _server.send(200, "application/json", "{\"ok\":true,\"message\":\"Chime played\"}");
 }
 
@@ -349,9 +363,14 @@ void WifiManager::handleSpeakRaw() {
 
       audioOutput.writePcm(samples, count);
 
-      // Actively refresh display and RGB animation while playing audio chunk
-      displayManager.update();
-      rgbManager.update();
+      // Refresh display and RGB animation at max 40 FPS to prevent SPI bus contention with TCP streaming
+      static unsigned long lastRawAnim = 0;
+      unsigned long now = millis();
+      if (now - lastRawAnim >= 25) {
+        lastRawAnim = now;
+        displayManager.update();
+        rgbManager.update();
+      }
     }
   } else if (raw.status == RAW_END) {
     if (_abortPlayback) {
@@ -384,6 +403,7 @@ void WifiManager::handleSpeakRaw() {
 
 void WifiManager::handleSpeakEnd() {
   _server.sendHeader("Access-Control-Allow-Origin", "*");
+  _server.sendHeader("Connection", "close");
   _server.send(200, "application/json", "{\"ok\":true,\"message\":\"Playback finished\"}");
 }
 
@@ -409,6 +429,7 @@ void WifiManager::handleStop() {
   rgbManager.update();
 
   _server.sendHeader("Access-Control-Allow-Origin", "*");
+  _server.sendHeader("Connection", "close");
   _server.send(200, "application/json", "{\"ok\":true,\"stopped\":true,\"state\":\"" + String(buddyStateToString(targetState)) + "\"}");
 }
 
@@ -420,6 +441,10 @@ void WifiManager::update() {
     _wasConnected = true;
     LOG_PRINTLN("\n[Wi-Fi] Connected successfully!");
     LOG_PRINTF("[Wi-Fi] IP Address: http://%s/\n", getIpAddress().c_str());
+    if (MDNS.begin("buddy")) {
+      MDNS.addService("http", "tcp", 80);
+      LOG_PRINTLN("[mDNS] Responder active at http://buddy.local/");
+    }
     displayManager.setWifiInfo(_ssid, getIpAddress());
     rgbManager.setState(STATE_IDLE);
     displayManager.setState(STATE_IDLE);
@@ -437,8 +462,8 @@ void WifiManager::update() {
     if (now - _lastReconnectAttempt > 12000) {
       _lastReconnectAttempt = now;
       wl_status_t st = WiFi.status();
-      if (st == WL_CONNECT_FAILED || st == WL_CONNECTION_LOST || st == WL_NO_SSID_AVAIL) {
-        LOG_PRINTF("[Wi-Fi] Retrying connection to '%s' (status code: %d)...\n", _ssid, (int)st);
+      if (st != WL_CONNECTED) {
+        LOG_PRINTF("[Wi-Fi] Reconnecting to '%s' (status code: %d)...\n", _ssid, (int)st);
         WiFi.disconnect(false);
         delay(100);
         WiFi.begin(_ssid, _password);
