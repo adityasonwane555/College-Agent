@@ -27,9 +27,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onSelectInputDevice,
   activeMicLabel,
   onRefreshDevices,
-  audioOutputTarget = 'robot',
+  // Default to dual output ('both') for simultaneous PC audio and ESP32 physical speaker
+  audioOutputTarget = 'both',
   onSelectOutputTarget,
-  audioInputSource = 'robot',
+  // Default to laptop microphone for browser kiosk input with fallback options
+  audioInputSource = 'laptop',
   onSelectInputSource
 }) => {
   const [isTestingMic, setIsTestingMic] = useState(false);
