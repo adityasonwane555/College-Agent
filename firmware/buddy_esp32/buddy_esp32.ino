@@ -22,8 +22,9 @@
 #include "audio_output.h"
 #include "wifi_manager.h"
 
-// Button state tracking
-bool lastButtonState = HIGH;
+// Button state tracking (falling-edge detection with debounce)
+bool lastButtonReading = HIGH;
+bool stableButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 50;
 
@@ -53,8 +54,12 @@ void setup() {
   microphoneManager.begin();
 
   // 6. Configure Optional Push-to-Talk Button
+#if defined(PIN_BTN_AUX) && (PIN_BTN_AUX >= 0)
   pinMode(PIN_BTN_AUX, INPUT_PULLUP);
-  pinMode(PIN_BTN_ACTION, INPUT_PULLUP);
+#endif
+  if (PIN_BTN_ACTION >= 0) {
+    pinMode(PIN_BTN_ACTION, INPUT_PULLUP);
+  }
 
   // 7. Start Wi-Fi & WebServer
   wifiManager.begin(WIFI_SSID_DEFAULT, WIFI_PASS_DEFAULT);
@@ -71,21 +76,33 @@ void loop() {
   rgbManager.update();
   displayManager.update();
 
-  // Push-to-Talk Button Monitoring (GPIO 1 or GPIO 0)
-  int reading = digitalRead(PIN_BTN_AUX) && digitalRead(PIN_BTN_ACTION);
-  if (reading != lastButtonState) {
+  // Push-to-Talk Button Monitoring (clean falling-edge trigger)
+  // Ensures push-to-talk only fires ONCE per physical button press (transition from HIGH to LOW).
+  // Prevents persistent clamp in STATE_LISTENING if the button is held or an input pin floats.
+  int reading = HIGH;
+  if (PIN_BTN_ACTION >= 0) {
+    reading = digitalRead(PIN_BTN_ACTION);
+  }
+#if defined(PIN_BTN_AUX) && (PIN_BTN_AUX >= 0)
+  reading = reading && digitalRead(PIN_BTN_AUX);
+#endif
+
+  if (reading != lastButtonReading) {
     lastDebounceTime = millis();
+    lastButtonReading = reading;
   }
 
   if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (reading == LOW && rgbManager.getState() != STATE_LISTENING) {
-      LOG_PRINTLN("[Button] Push-to-Talk activated!");
-      rgbManager.setState(STATE_LISTENING);
-      displayManager.setState(STATE_LISTENING);
-      displayManager.setMessage("Listening", "Speak your question now...");
+    if (reading != stableButtonState) {
+      stableButtonState = reading;
+      if (stableButtonState == LOW) {
+        LOG_PRINTLN("[Button] Push-to-Talk activated (falling edge)!");
+        rgbManager.setState(STATE_LISTENING);
+        displayManager.setState(STATE_LISTENING);
+        displayManager.setMessage("Listening", "Speak your question now...");
+      }
     }
   }
-  lastButtonState = reading;
 
   // Real-time microphone audio energy monitoring
   if (rgbManager.getState() == STATE_LISTENING) {
