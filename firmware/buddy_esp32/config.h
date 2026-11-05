@@ -36,8 +36,11 @@
 #define PIN_AMP_DIN             17      // I²S Audio Data from ESP32 to Amp
 
 // --- Optional Tactile Buttons & Indicator LEDs ---
-#define PIN_BTN_ACTION          0       // Onboard BOOT button (or external button on GPIO 1)
-#define PIN_BTN_AUX             1       // Auxiliary Push Button (with INPUT_PULLUP)
+// NOTE: PIN_BTN_AUX is disabled (-1) by default to prevent floating input pins from
+// erroneously triggering push-to-talk. The onboard BOOT button (GPIO 0) has a dedicated
+// hardware 10k pull-up resistor and is used as the primary falling-edge action button.
+#define PIN_BTN_ACTION          0       // Onboard BOOT button (hardware pull-up to 3.3V)
+#define PIN_BTN_AUX             -1      // Auxiliary Push Button (disabled by default; set to >= 0 if physically wired)
 #define PIN_LED_STATUS          2       // External Status LED (via 220 ohm resistor)
 
 // =====================================================================
