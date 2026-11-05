@@ -18,15 +18,17 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  // Audio Input Routing: defaults to 'laptop' for instant browser capture, with automated
+  // fallback if the ESP32 INMP441 physical robot microphone is unreachable.
   const [audioInputSource, setAudioInputSourceState] = useState<'robot' | 'laptop'>(() => {
-    return (localStorage.getItem('buddy_audio_input_source') as 'robot' | 'laptop') || 'robot';
+    return (localStorage.getItem('buddy_audio_input_source') as 'robot' | 'laptop') || 'laptop';
   });
   const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedInputDeviceId, setSelectedInputDeviceId] = useState<string>(() => {
     return localStorage.getItem('buddy_audio_input_id') || 'default';
   });
   const [activeMicLabel, setActiveMicLabel] = useState<string>(() => {
-    const savedSource = (localStorage.getItem('buddy_audio_input_source') as 'robot' | 'laptop') || 'robot';
+    const savedSource = (localStorage.getItem('buddy_audio_input_source') as 'robot' | 'laptop') || 'laptop';
     return savedSource === 'robot' ? 'Robot Mic (ESP32 INMP441)' : 'Default Microphone';
   });
 
@@ -40,6 +42,8 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
     }
   }, []);
 
+  // Audio Output Routing: defaults to 'both' to guarantee audible playback through both
+  // laptop/browser speakers and the physical ESP32 MAX98357A speaker simultaneously.
   const [audioOutputTarget, setAudioOutputTargetState] = useState<'robot' | 'laptop' | 'both'>(() => {
     const saved = localStorage.getItem('buddy_audio_output_target');
     if (!saved || saved === 'robot') {
@@ -448,7 +452,13 @@ export function useVoice({ onTranscriptionComplete, onStateChange, onError }: Us
           onTranscriptionComplete(result.text.trim());
         } else {
           console.warn("[useVoice] No speech detected from robot mic:", result);
-          onError(result.error || "No speech detected from robot microphone. Please speak clearly towards the robot's microphone.");
+          // Automated graceful degradation: switch to laptop mic if robot mic is offline/unreachable
+          if (result.error && result.error.includes('No audio received')) {
+            onError("Robot mic offline. Switched to Laptop Mic.");
+            setAudioInputSource('laptop');
+          } else {
+            onError(result.error || "No speech detected from robot microphone. Please speak clearly towards the robot's microphone.");
+          }
           onStateChange('idle');
           api.setLedState('IDLE');
         }
