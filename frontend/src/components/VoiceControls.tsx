@@ -29,9 +29,11 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   onToggleMute,
   activeMicLabel,
   onOpenSettings,
+  // Default to dual audio output ('both') so speech plays physically and in browser
   audioOutputTarget = 'both',
   onSelectOutputTarget,
-  audioInputSource = 'robot',
+  // Default to local laptop microphone for low-latency web recording with automatic fallback
+  audioInputSource = 'laptop',
   onSelectInputSource
 }) => {
   const pointerDownTimeRef = useRef<number>(0);
