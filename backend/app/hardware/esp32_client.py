@@ -5,6 +5,7 @@ Provides complete integration between the PC AI Agent and the ESP32-S3:
 - ST7789 TFT display updates (robot expressions, status cards, answers)
 - Streaming audio playback from PC to MAX98357A speaker
 - Fetching audio captures from INMP441 microphone for Whisper transcription
+- Self-healing auto-discovery across local Wi-Fi subnet & mDNS
 """
 
 import io
@@ -29,6 +30,7 @@ class ESP32Client:
         self.timeout = timeout
         self.is_connected = False
         self.last_contact = 0.0
+        self._last_speaker_fail = 0.0
         self._streaming_lock = threading.Lock()
         self._active_stream_client: Optional[httpx.Client] = None
 
@@ -36,18 +38,66 @@ class ESP32Client:
         """
         Polls the ESP32-S3 /health endpoint to verify network reachability,
         WiFi signal strength (RSSI), battery voltage, and free heap memory.
+        Auto-discovers the ESP32 if the configured IP is unreachable.
         """
         try:
-            with httpx.Client(timeout=self.timeout) as client:
+            with httpx.Client(timeout=min(self.timeout, 2.5)) as client:
                 resp = client.get(f"{self.base_url}/health")
-                if resp.status_code == 200:
+                if resp.status_code == 200 and "buddy_esp32" in resp.text:
                     self.is_connected = True
                     self.last_contact = time.time()
                     return resp.json()
-        except Exception as e:
-            self.is_connected = False
-            logger.warning(f"ESP32 health check failed: {e}")
-        return {"status": "offline", "error": "Cannot reach ESP32"}
+        except Exception:
+            pass
+
+        # Attempt auto-discovery across mDNS & local subnet ARP table
+        discovered = self.discover_esp32()
+        if discovered:
+            return discovered
+
+        self.is_connected = False
+        return {"status": "offline", "error": f"Cannot reach ESP32 at {self.base_url}"}
+
+    def discover_esp32(self) -> Optional[Dict[str, Any]]:
+        """
+        Locates the ESP32-S3 via mDNS (buddy.local) or local subnet ARP candidates.
+        Automatically updates base_url and synchronizes RGBController upon finding the board.
+        """
+        candidates = ["http://buddy.local"]
+        try:
+            import subprocess
+            out = subprocess.check_output("arp -a", shell=True, text=True, errors="replace")
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) >= 2 and parts[0].count(".") == 3:
+                    ip = parts[0]
+                    if not (ip.startswith("224.") or ip.endswith(".255") or ip.startswith("127.")):
+                        candidates.append(f"http://{ip}")
+        except Exception:
+            pass
+
+        seen = {self.base_url}
+        for cand in candidates:
+            if cand in seen:
+                continue
+            seen.add(cand)
+            try:
+                with httpx.Client(timeout=0.8) as client:
+                    resp = client.get(f"{cand}/health")
+                    if resp.status_code == 200 and "buddy_esp32" in resp.text:
+                        logger.info(f"[ESP32 Discovery] Located ESP32 at {cand} (switched from {self.base_url})")
+                        self.base_url = cand
+                        self.is_connected = True
+                        self.last_contact = time.time()
+                        try:
+                            from .rgb_controller import rgb_controller
+                            rgb_controller.base_url = cand
+                        except Exception:
+                            pass
+                        return resp.json()
+            except Exception:
+                continue
+        return None
 
     def set_state(
         self,
@@ -67,7 +117,11 @@ class ESP32Client:
         }
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                resp = client.post(f"{self.base_url}/api/state", json=payload)
+                resp = client.post(
+                    f"{self.base_url}/api/state",
+                    json=payload,
+                    headers={"Connection": "close"}
+                )
                 return resp.status_code == 200
         except Exception as e:
             logger.warning(f"Failed to set ESP32 state: {e}")
@@ -79,7 +133,8 @@ class ESP32Client:
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.post(
                     f"{self.base_url}/api/display",
-                    data={"title": title, "body": body}
+                    data={"title": title, "body": body},
+                    headers={"Connection": "close"}
                 )
                 return resp.status_code == 200
         except Exception as e:
@@ -90,7 +145,10 @@ class ESP32Client:
         """Triggers the ESP32 hardware chime tone test."""
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                resp = client.post(f"{self.base_url}/api/chime")
+                resp = client.post(
+                    f"{self.base_url}/api/chime",
+                    headers={"Connection": "close"}
+                )
                 return resp.status_code == 200
         except Exception as e:
             logger.warning(f"Failed to trigger chime: {e}")
@@ -98,10 +156,16 @@ class ESP32Client:
 
     def stream_wav_to_speaker(self, audio_bytes: bytes, sample_rate: int = 24000) -> bool:
         """
-        Decodes any audio file (MP3, WAV, etc.) into 16-bit mono PCM and streams it
-        directly to the ESP32 MAX98357A speaker over Wi-Fi.
+        Decodes any incoming audio file (MP3 from Edge-TTS, WAV from Fish Audio, etc.)
+        into signed 16-bit mono PCM and streams it directly to the ESP32 MAX98357A I2S DAC.
+        
+        Network & Audio Handling:
+        - Uses PyAV for fast hardware/software decoding and resamples to exactly 24 kHz mono.
+        - Employs dynamic stream timeout based on audio duration (length / byte_rate).
+        - Enforces 'Connection: close' to ensure single-threaded ESP32 WebServer releases socket.
+        - Features a non-blocking circuit breaker with brief 2.0s cooldown on failure.
         """
-        if time.time() - getattr(self, "_last_speaker_fail", 0.0) < 20.0:
+        if time.time() - self._last_speaker_fail < 2.0:
             return False
         try:
             raw_pcm = b""
@@ -115,7 +179,7 @@ class ESP32Client:
                     for rframe in resampler.resample(frame):
                         chunks.append(rframe.to_ndarray().tobytes())
                 raw_pcm = b"".join(chunks)
-            except Exception as av_err:
+            except Exception:
                 # Fallback to standard library wave module for WAV
                 with io.BytesIO(audio_bytes) as bio:
                     with wave.open(bio, "rb") as wf:
@@ -130,21 +194,25 @@ class ESP32Client:
             audio_duration_sec = len(raw_pcm) / float(sample_rate * 2)
             stream_timeout = max(audio_duration_sec * 2.5 + 30.0, 90.0)
 
-            client = httpx.Client(timeout=httpx.Timeout(stream_timeout, connect=2.0))
+            client = httpx.Client(timeout=httpx.Timeout(stream_timeout, connect=5.0))
             with self._streaming_lock:
                 self._active_stream_client = client
             try:
                 url = f"{self.base_url}/api/speak/raw"
+                headers = {
+                    "Content-Type": "application/octet-stream",
+                    "Connection": "close"
+                }
                 resp = client.post(
                     url,
                     content=raw_pcm,
-                    headers={"Content-Type": "application/octet-stream"}
+                    headers=headers
                 )
                 if resp.status_code == 404:
                     resp = client.post(
                         f"{self.base_url}/api/speak",
                         content=raw_pcm,
-                        headers={"Content-Type": "application/octet-stream"}
+                        headers=headers
                     )
                 return resp.status_code == 200
             finally:
@@ -173,7 +241,10 @@ class ESP32Client:
         try:
             state_val = target_state.upper() if target_state else ("IDLE" if reset_display else "IDLE")
             with httpx.Client(timeout=2.0) as client:
-                resp = client.post(f"{self.base_url}/api/stop?state={state_val}&idle=1")
+                resp = client.post(
+                    f"{self.base_url}/api/stop?state={state_val}&idle=1",
+                    headers={"Connection": "close"}
+                )
                 return resp.status_code == 200
         except Exception as e:
             logger.warning(f"Failed to send stop signal to ESP32: {e}")
