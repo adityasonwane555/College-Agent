@@ -3,8 +3,20 @@
  * BUDDY AI — MAX98357A Audio Output Implementation
  * Hardware Peripheral: ESP32-S3 I2S1 Controller (Dedicated TX)
  * Pins: BCLK=GPIO 15, LRC=GPIO 16, DIN=GPIO 17
- * Note: I2S1 is strictly used for DAC playback to prevent resource contention
- *       with the INMP441 microphone operating concurrently on I2S0 RX.
+ *
+ * Hardware & Audio Pipeline Architecture:
+ *   - Dedicated I2S1 Peripheral: Runs in Master TX mode, completely isolated from
+ *     I2S0 (INMP441 RX) to eliminate DMA arbitration conflicts and jitter.
+ *   - Dynamic Sample Rate: Adapts seamlessly to 16 kHz (TTS voice) and 24 kHz
+ *     (neural speech / chime synthesis).
+ *   - Stereo Interleaving: Duplicates incoming mono PCM into standard 2-channel Left/Right
+ *     I2S frames required by MAX98357A SD_MODE decoding.
+ *   - Anti-Clipping & Soft Limiting: Clamps scaled 32-bit intermediate samples strictly
+ *     to signed 16-bit boundaries [-32768, 32767] to avoid wrap-around distortion.
+ *   - Zero-Latency DMA Flushing: Clears DMA ring buffers immediately upon stop/interrupt
+ *     to halt audio playback without audible reverberation or residual syllables.
+ *   - Synthesized Startup Chime: Real-time mathematical sine-wave synthesis of an ascending
+ *     C-major triad (C5 -> E5 -> G5) with exponential fade envelopes to prevent DC pop clicks.
  * =====================================================================================
  */
 
@@ -91,11 +103,26 @@ void AudioOutput::stop() {
   }
 }
 
+/**
+ * Updates the software volume scaling factor.
+ * Clamps input strictly within unit range [0.0, 1.0].
+ *
+ * @param volume Floating point attenuation factor (0.0 = muted, 1.0 = maximum unclipped gain).
+ */
 void AudioOutput::setVolume(float volume) {
   _volume = constrain(volume, 0.0f, 1.0f);
   LOG_PRINTF("[AMP] Volume set to %.2f\n", _volume);
 }
 
+/**
+ * Streams raw signed 16-bit mono PCM samples to the MAX98357A class-D amplifier.
+ * Converts mono stream to stereo I2S frames on-the-fly using stack-allocated chunks.
+ * Applies software volume attenuation and saturation clipping to avoid distortion.
+ *
+ * @param samples Pointer to 16-bit signed PCM buffer.
+ * @param sampleCount Number of mono samples to transmit.
+ * @return Total number of mono samples successfully written.
+ */
 size_t AudioOutput::writePcm(const int16_t* samples, size_t sampleCount) {
   if (!_isInitialized || !samples || sampleCount == 0) {
     return 0;
@@ -133,6 +160,11 @@ size_t AudioOutput::writePcm(const int16_t* samples, size_t sampleCount) {
   return totalSamplesWritten;
 }
 
+/**
+ * Synthesizes and plays a smooth 3-tone ascending C-major triad (C5 -> E5 -> G5) on startup.
+ * Generates pure mathematical sine waves in real-time with linear amplitude decay
+ * envelopes to eliminate speaker pop/click transients on tone transitions.
+ */
 void AudioOutput::playChime() {
   if (!_isInitialized) {
     begin(24000);
@@ -145,7 +177,7 @@ void AudioOutput::playChime() {
   int16_t* buf = (int16_t*)malloc(toneSamples * sizeof(int16_t));
   if (!buf) return;
 
-  // Tone 1: 523.25 Hz (C5) - Full volume sine wave
+  // Tone 1: 523.25 Hz (C5) - Full volume sine wave with smooth linear tail decay
   for (size_t i = 0; i < toneSamples; i++) {
     float env = 1.0f;
     if (i > (toneSamples * 4 / 5)) {
