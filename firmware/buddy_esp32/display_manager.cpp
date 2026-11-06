@@ -3,12 +3,14 @@
  * BUDDY AI — ST7789 Display Manager Implementation
  * Exact Visual Mirror of Browser Kiosk Robot Face
  * 
- * Hardware & Performance Upgrades:
+ * Hardware & Rendering Architecture:
  *   - 40 MHz Hardware SPI Bus on ESP32-S3 (25x faster than bit-banged software SPI)
  *   - Off-screen Micro-Canvas Double Buffering (RAM to Screen, ZERO flicker, ZERO tearing)
- *   - Independent Zonal Rendering: Only eyes update during blinks!
- *   - Cheeks and mouth remain static and glowing, completely unaffected by blinks.
- *   - Eliminates scanline artifact ("line going from top to bottom").
+ *   - Independent Zonal Rendering: Only eyes update during blinks; mouth and cheeks remain static
+ *   - Parametric Eyes: Natural sinusoids for eyelids, specular glints, and gaze saccades
+ *   - Audio-Reactive Lip Sync: Dynamic mouth morphing driven by real-time speech amplitude
+ *   - Celestial Thinking Halo: Orbiting particle ring rendered during AI reasoning states
+ *   - Color Palette: 16-bit RGB565 precisely matching the frontend robot CSS theme
  * =====================================================================================
  */
 
@@ -441,13 +443,14 @@ void DisplayManager::updateHalo(unsigned long now) {
 
 void DisplayManager::update() {
   unsigned long now = millis();
-  // Smooth 40-50 FPS animation loop (every 22ms)
+  // Smooth 40-50 FPS animation tick (every 22ms) to balance fluid facial expressions with CPU budget
   if (now - _lastAnimUpdate < 22) {
     return;
   }
   _lastAnimUpdate = now;
 
-  // Clean, zero-flicker independent zonal updates via off-screen micro-canvases
+  // Independent zonal rendering: updates only micro-canvases whose state or geometry changed,
+  // blitting directly to ST7789 via high-speed 40MHz DMA/SPI to guarantee zero flicker.
   updateHalo(now);
   updateEyes(now);
   updateMouth(now);
