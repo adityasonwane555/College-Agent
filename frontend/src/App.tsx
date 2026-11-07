@@ -1,3 +1,24 @@
+/**
+ * BUDDY AI — Smart AI College Receptionist Browser Kiosk Application
+ *
+ * Frontend Architecture & Orchestration:
+ *   - Twin-Display Synchrony:
+ *       Mirrors robot state (idle, listening, thinking, speaking, error) in real-time
+ *       between the browser kiosk canvas face and the physical ESP32-S3 ST7789 LCD screen.
+ *   - Dual Audio Routing:
+ *       Routes synthesized neural speech (Fish Audio / Edge-TTS) to browser speakers,
+ *       ESP32 MAX98357A I2S hardware speaker, or both concurrently.
+ *   - Dual Microphone Ingestion:
+ *       Accepts voice commands from both laptop/desktop microphones (via MediaRecorder)
+ *       and physical INMP441 I2S digital MEMS microphone with automated failover.
+ *   - Synchronized Lighting Dispatches:
+ *       Dispatches real-time RGB state changes to backend hardware endpoints (`/api/hardware/led`)
+ *       for WS2812 LED animations on GPIO 48.
+ *   - Global Shortcuts & Interactivity:
+ *       Pressing 'Escape' or clicking the robot's face triggers zero-latency speech interrupts
+ *       to immediately halt audio playback and DMA buffers.
+ */
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { RobotState, ChatMessage, HealthStatus, AppConfig } from './types';
 import { api } from './services/api';
@@ -12,6 +33,7 @@ import { Send, Settings, ShieldCheck, Sparkles } from 'lucide-react';
 import './styles/global.css';
 import './styles/robot.css';
 
+/** Curated fast-query suggestions displayed as interactive chips on the kiosk interface. */
 const SUGGESTIONS = [
   "What is our college name and heritage?",
   "Who is the Principal and where is his office?",
@@ -20,6 +42,10 @@ const SUGGESTIONS = [
   "What companies visit for campus placements?"
 ];
 
+/**
+ * Root Application Component for Buddy AI Reception Kiosk.
+ * Manages conversation history, voice interaction loops, modal states, and hardware telemetry.
+ */
 export const App: React.FC = () => {
   const [robotState, setRobotState] = useState<RobotState>('idle');
   const [statusText, setStatusText] = useState<string>('');
@@ -32,7 +58,10 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
-  // Load backend health and config on mount
+  /**
+   * Fetches latest backend system health diagnostics and runtime configuration.
+   * Returns true if server responded successfully; false on network error.
+   */
   const refreshSystemData = useCallback(async (): Promise<boolean> => {
     try {
       const [h, c] = await Promise.all([api.getHealth(), api.getConfig()]);
@@ -46,6 +75,7 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  // Periodic health check polling with dynamic retry backoff
   useEffect(() => {
     let active = true;
     let timer: number;
@@ -74,6 +104,10 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  /**
+   * Sets a temporary robot facial expression and status badge message
+   * that automatically reverts to IDLE after durationMs.
+   */
   const setTimedState = useCallback((state: RobotState, text: string, durationMs: number = 2500) => {
     clearStatusTimer();
     setRobotState(state);
@@ -85,7 +119,7 @@ export const App: React.FC = () => {
     }, durationMs);
   }, [clearStatusTimer]);
 
-  // Voice Interaction Hook
+  // Voice Interaction Hook with audio routing and device management
   const {
     isRecording,
     isSpeaking,
@@ -117,7 +151,9 @@ export const App: React.FC = () => {
     }
   });
 
-  // Handle User Message Submission
+  /**
+   * Dispatches user message to the backend agent orchestrator and manages response speech playback.
+   */
   const handleSendMessage = async (msgText: string) => {
     const trimmed = msgText.trim();
     if (!trimmed) return;
@@ -165,6 +201,7 @@ export const App: React.FC = () => {
     }
   };
 
+  /** Resets active conversation history and session token. */
   const handleClearSession = () => {
     clearStatusTimer();
     stopSpeaking('idle');
