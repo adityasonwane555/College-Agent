@@ -1,7 +1,20 @@
 """
 BUDDY AI — Conversational Agent Orchestrator
-Coordinates multi-turn dialogue memory, real-time Google Gemini web research,
-adaptive hybrid RAG routing, tool calling, and grounded citation synthesis.
+
+Architecture & Decision Pipeline:
+  - Multi-Tiered Intelligent Routing:
+      1. Fast-Path Direct Resolution: Sub-10ms keyword lookup for standard greeting/campus queries.
+      2. Adaptive Multi-Model Router: Analyzes query complexity to dispatch to local Qwen 2.5 (GPU),
+         Groq LPU (cloud ultra-low latency), or Gemini 2.0 Flash (deep reasoning).
+      3. Google Gemini Live Web Research: Automatically triggered for current events, live news,
+         weather, or real-time internet topics, strictly excluding local college inquiries.
+      4. Tool Execution Loop: Supports recursive multi-turn tool calling (up to MAX_TOOL_ITERATIONS)
+         with schema validation and structured citation tracking.
+  - Session & Conversation Memory:
+      - Thread-safe FIFO sliding window history maintaining system instructions at index 0.
+      - Automatically trims oldest turns while preserving context coherence across sessions.
+  - Grounding & Guardrails:
+      - Validates output assertions against official campus knowledge base to prevent hallucinations.
 """
 
 import json
@@ -20,7 +33,17 @@ from .grounding import verify_response_grounding
 
 
 def is_web_or_research_query(query: str) -> bool:
-    """Detects if user is asking for live web research or real-time internet search."""
+    """
+    Classifies whether an incoming query requires external live web research.
+    Strictly safeguards college-specific questions from triggering web search
+    by checking for APCOER faculty, departments, rooms, and campus keywords.
+
+    Args:
+        query: Raw user utterance string.
+
+    Returns:
+        bool: True if external live web research should be invoked; False for campus/general topics.
+    """
     q = query.lower().strip()
 
     # If the question contains college context, it is not an external web query
@@ -47,12 +70,30 @@ def is_web_or_research_query(query: str) -> bool:
 
 
 class SessionManager:
-    """Manages isolated conversation histories by session ID."""
+    """
+    Manages multi-turn conversation memory buffers isolated by unique session IDs.
+    Preserves system instructions while sliding a window of recent user and agent messages.
+    """
     def __init__(self, max_history: int = 15):
+        """
+        Initializes session buffer with a configurable history depth.
+
+        Args:
+            max_history: Maximum number of recent conversational messages to retain.
+        """
         self.max_history = max_history
         self.sessions: Dict[str, List[Dict[str, Any]]] = {}
 
     def get_history(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieves or initializes conversation message history for a given session.
+
+        Args:
+            session_id: Unique string session token.
+
+        Returns:
+            List[Dict[str, Any]]: List of message dictionaries with role and content.
+        """
         if session_id not in self.sessions:
             self.sessions[session_id] = [
                 {"role": "system", "content": SYSTEM_PROMPT}
@@ -60,6 +101,13 @@ class SessionManager:
         return self.sessions[session_id]
 
     def add_message(self, session_id: str, message: Dict[str, Any]):
+        """
+        Appends a new turn to session history and trims oldest messages if limit is exceeded.
+
+        Args:
+            session_id: Unique string session token.
+            message: Message dictionary containing 'role' and 'content' or 'tool_calls'.
+        """
         history = self.get_history(session_id)
         history.append(message)
         # Keep system prompt at [0] and trim older messages
@@ -67,6 +115,12 @@ class SessionManager:
             self.sessions[session_id] = [history[0]] + history[-(self.max_history):]
 
     def reset_session(self, session_id: str):
+        """
+        Clears conversation history for the session, restoring default system prompt.
+
+        Args:
+            session_id: Unique string session token.
+        """
         self.sessions[session_id] = [
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
@@ -76,7 +130,10 @@ session_manager = SessionManager(max_history=settings.SESSION_MAX_HISTORY)
 
 
 class AgentOrchestrator:
-    """Coordinates Ollama & Groq model calls, tool execution, and citation grounding."""
+    """
+    Master reasoning agent that orchestrates multi-turn LLM reasoning,
+    hybrid retrieval routing, tool execution, and citation grounding.
+    """
 
     async def run(
         self,
@@ -84,6 +141,26 @@ class AgentOrchestrator:
         session_id: Optional[str] = None,
         status_callback: Optional[Any] = None
     ) -> Dict[str, Any]:
+        """
+        Executes an agent reasoning cycle for an incoming user query.
+
+        Execution Pipeline:
+          1. Records user message in session memory.
+          2. Evaluates fast-path heuristics (<10ms).
+          3. Evaluates adaptive router (local vs cloud).
+          4. Checks for external web research triggers via Google Gemini.
+          5. Enters iterative tool execution loop (up to MAX_TOOL_ITERATIONS).
+          6. Collates structured citations and returns validated response.
+
+        Args:
+            user_message: Plain text input from the user.
+            session_id: Unique identifier for dialogue continuity (generates UUID if omitted).
+            status_callback: Optional async function for emitting live UI status updates.
+
+        Returns:
+            Dict[str, Any]: Response payload containing 'session_id', 'response', 'citations',
+                            'is_simulated', and 'tool_iterations'.
+        """
         sid = session_id or str(uuid.uuid4())
         session_manager.add_message(sid, {"role": "user", "content": user_message})
 
