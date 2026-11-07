@@ -1,3 +1,19 @@
+"""
+BUDDY AI — FastAPI Server & Real-Time Gateway
+
+Architecture & Lifecycle Pipeline:
+  - Windows UTF-8 Terminal Stream Wrapper:
+      - Intercepts sys.stdout and sys.stderr buffers on Windows to force UTF-8 text wrapping,
+        preventing console encoding crashes on Unicode emojis and Marathi names.
+  - Asynchronous Application Lifespan:
+      - Startup: Executes relational SQLite schema migrations, seeds authoritative campus directory,
+        ingests foundational documents (prospectus, campus maps) into ChromaDB, and verifies Ollama health.
+      - Teardown: Safely closes open database connections and cleans up background tasks.
+  - Full-Duplex Real-Time Telemetry:
+      - Maintains active WebSocket subscriber pool (`/ws/status`) for bidirectional state synchronization
+        between browser kiosk, backend orchestrator, and ESP32 hardware client.
+"""
+
 import sys
 import io
 
@@ -25,19 +41,41 @@ from .documents.ingestion import ingest_sample_documents
 from .services.ollama_service import check_ollama_status
 
 
-# Active WebSocket clients tracking
 class ConnectionManager:
+    """
+    Manages active WebSocket connections for real-time telemetry streaming and state broadcasting.
+    Safely prunes dead/closed sockets during broadcast sweeps.
+    """
     def __init__(self):
         self.active_connections: Set[WebSocket] = set()
 
     async def connect(self, websocket: WebSocket):
+        """
+        Accepts incoming WebSocket handshake and registers client in active subscriber set.
+
+        Args:
+            websocket: Connecting FastAPI WebSocket instance.
+        """
         await websocket.accept()
         self.active_connections.add(websocket)
 
     def disconnect(self, websocket: WebSocket):
+        """
+        Unregisters disconnected WebSocket client from active subscriber set.
+
+        Args:
+            websocket: Disconnecting FastAPI WebSocket instance.
+        """
         self.active_connections.discard(websocket)
 
     async def broadcast(self, message: dict):
+        """
+        Broadcasts a JSON message payload to all actively connected WebSocket clients.
+        Automatically purges any connections that throw write exceptions.
+
+        Args:
+            message: Dictionary payload to serialize and transmit.
+        """
         dead_connections = set()
         for conn in self.active_connections:
             try:
@@ -53,6 +91,14 @@ ws_manager = ConnectionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    FastAPI lifespan context manager controlling application initialization and shutdown.
+
+    Startup Sequence:
+      1. Initializes SQLite schema and seeds authoritative faculty/department tables.
+      2. Ingests sample college prospectuses and campus documents into ChromaDB vector store.
+      3. Verifies local Ollama LLM availability and reports GPU acceleration status.
+    """
     # Startup: Seed database and ingest sample documents
     print("Initializing Buddy Database and Sample College Documents...")
     seed_database()
@@ -96,6 +142,13 @@ app.include_router(router)
 # WebSocket status endpoint
 @app.websocket("/ws/status")
 async def websocket_status_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint streaming real-time robot state, telemetry, and audio activity.
+    Transmits initial connection greeting and listens for incoming kiosk commands.
+
+    Args:
+        websocket: Established client WebSocket connection.
+    """
     await ws_manager.connect(websocket)
     # Send initial welcome state
     await websocket.send_json({
