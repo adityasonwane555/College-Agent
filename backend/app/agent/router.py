@@ -1,9 +1,21 @@
 """
 BUDDY AI 2.0 — Adaptive Multi-Model Router & Offline Intelligence
-Routes queries based on intent, measured availability, and offline status.
-Guarantees fast offline response without waiting on cloud timeouts.
-Implements pronoun reference resolution, contextual query enrichment,
-and seamless failover across Gemini, Groq, Ollama, and local knowledge stores.
+
+Architecture & Routing Pipeline:
+  - Query Intent Classification:
+      - Categorizes user inputs into 6 deterministic intents: GREETING, DIRECT_COLLEGE_FACT,
+        COLLEGE_SEARCH, GENERAL_KNOWLEDGE, CURRENT_EVENT, and COMPLEX_RESEARCH.
+  - Multi-Turn Pronoun Coreference Resolution:
+      - Inspects prior conversation history when pronouns ("he", "she", "him", "her", "his", "they")
+        are detected to automatically enrich the search query with the referenced faculty member's name.
+  - Local Hybrid RAG Search (SQL + FTS + Vector):
+      - Executes authoritative relational queries against SQLite for verified faculty, departments,
+        and cutoffs; augments with BM25 full-text search and ChromaDB semantic embeddings.
+  - Multi-Model LLM Synthesis Ladder:
+      - 1. Groq Cloud LPU: Sub-500ms synthesis for low-latency dialogue.
+      - 2. Google Gemini 2.0 Flash: High-accuracy reasoning fallback.
+      - 3. Local Ollama (qwen2.5:3b on GPU): Zero-network local inference.
+      - 4. Authoritative Structured Fallback: Pure relational SQL answers when all LLMs are offline.
 """
 
 from enum import Enum
@@ -17,6 +29,9 @@ from ..documents.hybrid_retrieval import hybrid_search, build_citations
 
 
 class QueryIntent(str, Enum):
+    """
+    Enumeration of semantic query intents recognized by the adaptive router.
+    """
     GREETING = "greeting"
     DIRECT_COLLEGE_FACT = "direct_college_fact"
     COLLEGE_SEARCH = "college_search"
@@ -40,6 +55,16 @@ COLLEGE_KEYWORDS = [
 
 
 def classify_query_intent(query: str) -> QueryIntent:
+    """
+    Analyzes an incoming query string to determine its primary semantic category.
+    Prioritizes fast greetings, live external events, college-specific facts, and general knowledge.
+
+    Args:
+        query: Raw user utterance string.
+
+    Returns:
+        QueryIntent: Resolved intent enum value.
+    """
     q = query.lower().strip()
 
     # 1. Greetings
@@ -69,14 +94,29 @@ def classify_query_intent(query: str) -> QueryIntent:
 
 
 class AdaptiveRouter:
-    """Intelligently routes requests to fast path, local SQL, hybrid RAG, Ollama, or Cloud AI."""
+    """
+    High-performance routing layer that intercepts queries and dispatches them
+    to optimal execution paths (Fast-Path, Relational SQL, Hybrid RAG, or Direct LLM).
+    """
 
     async def route(
         self,
         query: str,
         session_history: List[Dict[str, Any]],
         force_offline: bool = False
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Routes an incoming user request to the most efficient engine based on intent and network state.
+
+        Args:
+            query: User's question or command.
+            session_history: Preceding multi-turn messages for context and coreference resolution.
+            force_offline: If True, bypasses all cloud API calls.
+
+        Returns:
+            Optional[Dict[str, Any]]: Completed answer dictionary with citations and provider details,
+                                      or None to yield execution to the full Agent Orchestrator.
+        """
         intent = classify_query_intent(query)
         health = await provider_manager.get_all_health()
 
