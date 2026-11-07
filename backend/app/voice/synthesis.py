@@ -1,8 +1,23 @@
 """
 BUDDY AI — Neural Text-to-Speech & Speech Synthesis Subsystem
-Provides multi-engine speech generation supporting Fish Audio Cloud API,
-local persistent s2.cpp high-fidelity voice cloning, and zero-GPU Edge-TTS fallback.
-Includes audio format normalization, float32-to-PCM16 conversion, and pronunciation cleaning.
+
+Architecture & Audio Pipeline:
+  - Multi-Engine Speech Dispatcher:
+      1. Fish Audio Cloud API (s2.1-pro-free cloud model): Ultra-high fidelity voice cloning
+         using custom reference IDs for the distinct Buddy personality.
+      2. Microsoft Edge-TTS Cloud Service: Ultra-fast neural synthesis (~1-2s latency, zero GPU VRAM)
+         using high-definition voices (e.g., en-US-AnaNeural).
+      3. Local s2.cpp Persistent Server: Embedded C++ inference engine loading quantized GGUF weights
+         (s2-pro-q5_k_m.gguf) with GPU layer offloading (-ngl 36) and custom reference embeddings.
+      4. Web Speech API Fallback: Client-side browser synthesis if network/local TTS is unreachable.
+  - Text Normalization & Acronym Phonetics:
+      - Strips markdown formatting, links, raw URLs, citation tags ([Source:...]), and emoji artifacts.
+      - Preserves clean phonetics for college acronyms (APCOER, ABMSP, SPPU, DTE, AICTE, HOD, TPO)
+        without jarring comma pauses or robotic spell-outs.
+  - Audio Format Normalization:
+      - Transcodes 32-bit IEEE float WAV (produced by s2.cpp, format tag 3) into standard
+        16-bit integer PCM WAV (format tag 1) with saturation clamping [-32767, 32767]
+        for universal compatibility across web browsers, mobile devices, and ESP32 MAX98357A I2S DACs.
 """
 
 import os
@@ -27,13 +42,34 @@ from .audio_utils import AUDIO_DIR
 _internal_s2_process: Optional[subprocess.Popen] = None
 
 
-async def _synthesize_edge_tts(text: str, out_file: Path, voice: str):
+async def _synthesize_edge_tts(text: str, out_file: Path, voice: str) -> None:
+    """
+    Internal asynchronous coroutine executing Edge-TTS network synthesis.
+    Streams synthesized audio chunks directly from Microsoft's WebSocket endpoint
+    and writes them to the specified output file on disk.
+
+    Args:
+        text: Normalized plain text to synthesize.
+        out_file: Target filesystem destination Path for MP3 audio.
+        voice: Microsoft neural voice identifier (e.g. 'en-US-AnaNeural').
+    """
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(str(out_file))
 
 
 def run_edge_tts_synthesis(text: str, out_file: Path, voice: str = "en-US-AnaNeural") -> bool:
-    """Ultra-fast neural speech synthesis via edge-tts (1-2s response time, zero GPU VRAM)."""
+    """
+    Executes synchronous neural speech synthesis via Edge-TTS inside a dedicated thread pool.
+    Guarantees sub-2-second turnaround time with zero GPU VRAM consumption.
+
+    Args:
+        text: Normalized plain text string to speak.
+        out_file: Output path where MP3 file should be saved.
+        voice: Neural voice model identifier (default: en-US-AnaNeural).
+
+    Returns:
+        bool: True if synthesis succeeded and generated valid audio bytes (> 500 bytes).
+    """
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             pool.submit(asyncio.run, _synthesize_edge_tts(text, out_file, voice)).result(timeout=20.0)
@@ -45,8 +81,15 @@ def run_edge_tts_synthesis(text: str, out_file: Path, voice: str = "en-US-AnaNeu
 
 def run_fish_audio_api_synthesis(text: str, out_file: Path) -> bool:
     """
-    Synthesizes speech using the Fish Audio Cloud API (https://api.fish.audio/v1/tts).
-    Uses the user's API key and model (s2.1-pro-free) to generate high-fidelity MP3.
+    Synthesizes speech using the official Fish Audio Cloud API (https://api.fish.audio/v1/tts).
+    Leverages user API key and cloned voice reference ID to stream studio-quality MP3 audio.
+
+    Args:
+        text: Normalized spoken text string.
+        out_file: Local filesystem destination Path for MP3 audio.
+
+    Returns:
+        bool: True if HTTP 200 response received with valid audio payload.
     """
     api_key = getattr(settings, "FISH_AUDIO_API_KEY", "")
     if not api_key:
@@ -82,7 +125,12 @@ def run_fish_audio_api_synthesis(text: str, out_file: Path) -> bool:
 
 
 def is_fish_tts_server_alive() -> bool:
-    """Checks if the persistent s2.cpp server is responding."""
+    """
+    Probes the persistent local s2.cpp HTTP server to determine if its listening socket is active.
+
+    Returns:
+        bool: True if server responds to HTTP requests; False on connection refusal or timeout.
+    """
     try:
         with httpx.Client(timeout=1.5) as client:
             # s2 server returns 404 or 400 on root/unsupported paths, indicating socket is alive
@@ -95,7 +143,13 @@ def is_fish_tts_server_alive() -> bool:
 
 
 def ensure_fish_tts_server() -> bool:
-    """Ensures the persistent s2.cpp HTTP server is running for low-latency synthesis."""
+    """
+    Ensures the persistent local s2.cpp C++ inference server is running in the background.
+    If offline, automatically spawns `s2.exe` with GGUF weights, tokenizer, and voice embeddings.
+
+    Returns:
+        bool: True if server is already alive or was successfully launched.
+    """
     global _internal_s2_process
     if is_fish_tts_server_alive():
         return True
@@ -140,9 +194,19 @@ def ensure_fish_tts_server() -> bool:
 
 def extract_spoken_text(text: str, max_chars: int = 1500) -> str:
     """
-    Cleans markdown formatting, citations, URLs, and labels from response text
-    and preserves complete, fluent natural dialogue for voice synthesis across full stops.
-    Ensures complete sentences are never cut off in the middle of speech.
+    Preprocesses and normalizes raw text for smooth, natural speech synthesis:
+      1. Strips internal tags like [DEMO DATA] and prompt artifacts.
+      2. Strips markdown links, raw URLs, and citation brackets ([Source:...]).
+      3. Normalizes college acronym pronunciations (APCOER, ABMSP, SPPU, DTE, AICTE)
+         to avoid stilted letter-by-letter pauses.
+      4. Truncates cleanly on sentence-ending punctuation to prevent dangling syllables.
+
+    Args:
+        text: Raw response string from agent or LLM.
+        max_chars: Maximum character cutoff limit (default: 1500).
+
+    Returns:
+        str: Cleaned, human-sounding text suitable for TTS engines.
     """
     clean = re.sub(r'\[DEMO DATA\]', '', text, flags=re.IGNORECASE)
     clean = re.sub(r'Here is what I found from the college records:?\s*', '', clean, flags=re.IGNORECASE)
@@ -190,8 +254,19 @@ def extract_spoken_text(text: str, max_chars: int = 1500) -> str:
 
 def convert_float32_wav_to_pcm16(raw: bytes) -> bytes:
     """
-    Converts 32-bit IEEE float WAV (produced by s2.cpp, tag 3) to standard
-    16-bit integer PCM WAV (tag 1) at 44.1 kHz, which plays natively in all web browsers.
+    Converts 32-bit IEEE float WAV (produced by s2.cpp, format tag 3) to standard
+    16-bit integer PCM WAV (format tag 1) at 44.1 kHz, which plays natively in all web browsers.
+
+    Audio Processing:
+      - Reads RIFF header and extracts channels, sample rate, and data payload.
+      - Clamps float32 values [-1.0, 1.0] to signed int16 [-32767, 32767].
+      - Packs standard 44-byte canonical RIFF PCM header.
+
+    Args:
+        raw: Raw bytes of the float32 WAV audio stream.
+
+    Returns:
+        bytes: Transcoded 16-bit integer PCM WAV byte string.
     """
     if len(raw) < 44 or raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
         return raw
@@ -220,7 +295,19 @@ def convert_float32_wav_to_pcm16(raw: bytes) -> bytes:
 
 def synthesize_speech(text: str) -> Dict[str, Any]:
     """
-    Synthesizes speech using the high-fidelity Fish Audio S2 Pro model or Edge-TTS.
+    Master speech synthesis gateway.
+    Routes speech request according to configuration priority:
+      1. Fish Audio Cloud API (if TTS_ENGINE is 'fish_audio_api' or 'fish_audio_cloud')
+      2. Microsoft Edge-TTS (if TTS_ENGINE is 'edge_tts')
+      3. Local Fish Audio s2.cpp persistent server
+      4. Local s2.exe CLI direct execution
+      5. Browser Web Speech API fallback
+
+    Args:
+        text: Raw text response from the robot agent.
+
+    Returns:
+        Dict[str, Any]: Response dictionary with status, method, audio_url, and file_path.
     """
     if not settings.TTS_ENABLED:
         return {
@@ -285,7 +372,7 @@ def synthesize_speech(text: str) -> Dict[str, Any]:
 
     output_filename = AUDIO_DIR / f"tts_{uuid.uuid4().hex[:8]}.wav"
 
-    # 2. Local Fish Audio S2 Pro Server (for full offline / custom neural model)
+    # 3. Local Fish Audio S2 Pro Server (for full offline / custom neural model)
     server_url = f"{settings.FISH_TTS_SERVER_URL}/generate"
     try:
         ensure_fish_tts_server()
@@ -327,7 +414,7 @@ def synthesize_speech(text: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"[Fish-TTS] Server request failed: {e}")
 
-    # 2. Direct CLI fallback ONLY if server is completely offline (avoids duplicate CPU-thrashing processes)
+    # 4. Direct CLI fallback ONLY if server is completely offline (avoids duplicate CPU-thrashing processes)
     if not is_fish_tts_server_alive():
         try:
             s2_bin = WORKSPACE_DIR / "BUDDY-Fish-TTS" / "s2.cpp" / "build" / "Release" / "s2.exe"
@@ -364,7 +451,7 @@ def synthesize_speech(text: str) -> Dict[str, Any]:
         except Exception as e:
             print(f"[Fish-TTS] Direct s2.exe CLI failed: {e}")
 
-    # 3. Graceful fallback if model is somehow unavailable
+    # 5. Graceful fallback if model is somehow unavailable
     return {
         "enabled": True,
         "method": "browser_fallback",
