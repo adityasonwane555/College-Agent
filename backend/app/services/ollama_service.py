@@ -1,10 +1,25 @@
+"""
+BUDDY AI — Local Ollama Service & Simulated Reception Intelligence
+
+Architecture & Inference Pipeline:
+  - Local Ollama Engine:
+      - Interacts with local Ollama daemon via REST (`http://127.0.0.1:11434/api/chat`).
+      - Executes quantized local models (e.g. Qwen 2.5:3b) on local GPU with full OpenAI/Ollama tool calling.
+  - Cached Liveness Probing:
+      - Implements short-lived TTL cache (5.0s) probing `/api/tags` to avoid connection timeout latency
+        in high-throughput voice query loops when the service is offline.
+  - Deterministic Mock Reception Fallback:
+      - Fully mirrors the tool-calling contract of the live model when Ollama is offline or uninstalled.
+      - Uses strict regex whole-word boundary matching (`\\b...\\b`) to eliminate false substring triggers.
+      - Emulates tool calls (`get_faculty`, `get_department`, `get_room`, `search_college_documents`)
+        against institutional SQLite records so all citations and UI states work seamlessly offline.
+"""
+
 import re
 import json
 import httpx
 from typing import Dict, Any, List, Optional
 from ..config import settings
-
-
 import time
 
 _ollama_cache: Dict[str, Any] = {
@@ -71,12 +86,31 @@ async def check_ollama_status() -> Dict[str, Any]:
 
 
 def _word_in_text(word: str, text: str) -> bool:
-    """Checks if a whole word exists in text with regex word boundaries."""
+    """
+    Checks if a whole word exists in target text using strict regex word boundaries.
+    Prevents false substring matches (e.g. 'it' inside 'Aditya' or 'visit').
+
+    Args:
+        word: Target keyword token.
+        text: Input string to search.
+
+    Returns:
+        bool: True if exact whole word occurs in text.
+    """
     return bool(re.search(r'\b' + re.escape(word) + r'\b', text, re.IGNORECASE))
 
 
 def _any_word_in_text(words: List[str], text: str) -> bool:
-    """Checks if any of the given words match as a whole word in text."""
+    """
+    Checks if any of the given keywords match as a complete word in text.
+
+    Args:
+        words: List of target keyword strings.
+        text: Input string to search.
+
+    Returns:
+        bool: True if at least one whole word matches.
+    """
     pattern = r'\b(' + '|'.join(re.escape(w) for w in words) + r')\b'
     return bool(re.search(pattern, text, re.IGNORECASE))
 
@@ -446,8 +480,19 @@ async def call_ollama_chat(
     tools: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
-    Sends chat completion request to Ollama.
-    Falls back gracefully to simulated agent if Ollama is not running.
+    Sends chat completion request to the local Ollama daemon.
+    Configures sampling parameters (temperature=0.7, top_p=0.9, repeat_penalty=1.15).
+    Falls back gracefully to intelligent simulated agent if Ollama is offline or times out.
+
+    Args:
+        messages: Conversation turn list conforming to Ollama/OpenAI schema.
+        tools: Optional list of function schemas for agent tool calling.
+
+    Returns:
+        Dict[str, Any]: Assistant message dictionary with 'content' or 'tool_calls'.
+
+    Raises:
+        RuntimeError: If Ollama is offline and mock fallback is explicitly disabled.
     """
     # Fast check: If Ollama is known to be offline, fallback immediately without stalling
     if not await is_ollama_online():
