@@ -1,8 +1,22 @@
 """
 BUDDY AI — Google Gemini Cloud AI Service
-High-accuracy cloud LLM reasoning, live web research, and online information extraction
-powered by Google Gemini (gemini-3.5-flash-lite / gemini-3.5-flash).
-Provides real-time internet data synthesis, web grounding, and multi-turn conversational dialogue.
+
+Architecture & Inference Pipeline:
+  - Google Gemini REST API Client:
+      - Interacts with Google Generative Language v1beta REST endpoints (`https://generativelanguage.googleapis.com/v1beta/models`).
+      - Supports ultra-fast reasoning with `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, and `gemini-3.5-flash`.
+  - Alternating Schema Mapping:
+      - Transforms OpenAI-style multi-turn message history into Google Gemini's strict alternating
+        `user` and `model` role structure with distinct top-level `systemInstruction`.
+      - Merges consecutive turns of identical roles and synthesizes tool outputs into grounded user context.
+  - Multi-Candidate Model Failover:
+      - Implements fallback across flash-lite model aliases on HTTP 404/429 errors.
+  - Circuit Breaker Rate-Limit Protection:
+      - Intercepts HTTP 429 quota exhaustion and engages a 20-second cooldown window to prevent
+        network blocking and trigger immediate routing to local/Groq engines.
+  - Grounded Live Web Research:
+      - Fetches real-time internet search snippets via `web_tools` and invokes Gemini for grounded,
+        hallucination-free synthesis with attributed source URLs and citations.
 """
 
 import re
@@ -22,7 +36,9 @@ _gemini_rate_limited_until = 0.0
 def is_gemini_available() -> bool:
     """
     Evaluates Google Gemini availability, API key provisioning, and circuit breaker rate-limit backoff.
-    Returns True only when the service is fully configured and ready for low-latency inference.
+
+    Returns:
+        bool: True only when Gemini is enabled, supplied with a valid key, and not in active cooldown.
     """
     global _gemini_rate_limited_until
     if time.time() < _gemini_rate_limited_until:
@@ -31,13 +47,23 @@ def is_gemini_available() -> bool:
 
 
 def reset_gemini_quota():
-    """Resets the rate limit cooldown."""
+    """
+    Manually resets the rate limit cooldown timer, enabling immediate retries.
+    """
     global _gemini_rate_limited_until
     _gemini_rate_limited_until = 0.0
 
 
 def _clean_reasoning_tags(text: str) -> str:
-    """Strips thinking and reasoning tags from final model output."""
+    """
+    Strips internal `<think>...</think>` reasoning trace blocks from final model output.
+
+    Args:
+        text: Raw generated text from reasoning models.
+
+    Returns:
+        str: Cleaned user-facing output string.
+    """
     if not text:
         return ""
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", text)
@@ -46,8 +72,21 @@ def _clean_reasoning_tags(text: str) -> str:
 
 def _prepare_messages_for_gemini(messages: List[Dict[str, Any]]) -> tuple[Optional[str], List[Dict[str, Any]]]:
     """
-    Transforms OpenAI/Ollama messages into Google Gemini's schema.
-    Separates system instructions from alternating user/model conversation turns.
+    Transforms OpenAI/Ollama message dictionaries into Google Gemini's contents format.
+
+    Formatting Rules:
+      1. Extracts system instructions into a unified top-level string.
+      2. Converts 'user', 'assistant' (model), and 'tool' turns into Gemini parts format.
+      3. Merges consecutive turns of identical roles to comply with Gemini's alternating turn constraint.
+      4. Ensures the conversation sequence always starts with a 'user' turn.
+
+    Args:
+        messages: List of message dictionaries from conversation history.
+
+    Returns:
+        tuple[Optional[str], List[Dict[str, Any]]]:
+            - system_instruction: Formatted top-level prompt or None.
+            - merged_contents: Alternating list of Gemini-compliant role/parts dictionaries.
     """
     system_parts = []
     raw_contents: List[Dict[str, Any]] = []
@@ -119,8 +158,20 @@ async def call_gemini_chat(
     max_tokens: int = 1500
 ) -> Dict[str, Any]:
     """
-    Executes a chat generation with Google Gemini REST API.
-    Returns the assistant message dictionary compatible with the orchestrator.
+    Executes a chat generation request against the Google Gemini REST API.
+    Handles tool declaration formatting, candidate model failover, and rate-limit backoff.
+
+    Args:
+        messages: Conversation turn list from session history.
+        tools: Optional list of function schemas for agent tool calling.
+        temperature: Sampling temperature (default: 0.3).
+        max_tokens: Maximum response token count.
+
+    Returns:
+        Dict[str, Any]: Standardized assistant message dictionary with 'role', 'content', and optional 'tool_calls'.
+
+    Raises:
+        RuntimeError: If Gemini is unconfigured, rate-limited, or all candidate models fail.
     """
     global _gemini_rate_limited_until
     if not is_gemini_available():
@@ -240,6 +291,15 @@ async def perform_gemini_web_research(
     2. Sends the live data to Google Gemini to synthesize a natural, direct answer.
     3. Preserves conversation context across multi-turn exchanges.
     4. Returns the synthesized text along with grounded source citations and URLs.
+
+    Args:
+        query: User's external search query.
+        system_prompt: Base persona guidelines for Buddy AI.
+        history: Preceding multi-turn dialogue context.
+
+    Returns:
+        Dict[str, Any]: Result dictionary containing 'response', 'citations', 'sources',
+                        'is_gemini', and 'is_web_research'.
     """
     from ..tools.web_tools import search_internet
 
