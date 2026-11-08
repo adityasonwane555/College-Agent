@@ -1,7 +1,19 @@
 """
 BUDDY AI 2.0 — Persistent Hybrid Retrieval Engine
-Combines Structured SQL, SQLite FTS5 Full-Text Retrieval, and Local Vector Search.
-Applies Reciprocal Rank Fusion (RRF) and deduplication for grounded evidence retrieval.
+
+Architecture & Retrieval Pipeline:
+  - 3-Way Tri-Brid Retrieval Engine:
+      1. Authoritative Structured SQL: Direct parameterized queries against SQLite tables
+         (approved events, faculty directories, engineering branches, and institutional heritage).
+      2. SQLite FTS5 Keyword Search: BM25-ranked full-text search indexing ingested documents and prospectus chunks.
+      3. Dense Semantic Vector Search: ChromaDB vector store matching embeddings for contextual paraphrasing.
+  - Reciprocal Rank Fusion (RRF) & Scoring:
+      - Combines rank signals using standard RRF formula `score = 1.0 / (60 + rank)`.
+      - Applies an authoritative priority boost (+2.0) to relational facts to ensure official college
+        records supersede fuzzy document extracts and eliminate hallucinations.
+  - Multi-Turn Deduplication & Citation Grounding:
+      - Collates and deduplicates evidence passages across retrieval sources, packaging structured
+        citations (`CitationModel`) for transparent UI verification.
 """
 
 from typing import List, Dict, Any, Optional
@@ -11,7 +23,21 @@ from .vector_store import vector_store
 
 
 def retrieve_structured_facts(query: str) -> List[Dict[str, Any]]:
-    """Retrieves authoritative facts from structured SQLite tables."""
+    """
+    Extracts authoritative verified records directly from SQLite tables based on query intent.
+
+    Evaluation Categories:
+      - College Events: Dates, venues, schedules, chief guests, and registration rules.
+      - Faculty & Leadership: Names, designations, cabins, office hours, and fuzzy spelling matching.
+      - Institutional Heritage: APCOER founding history, ABMSP parent trust (1907), motto, and DTE Code 6794.
+      - Academic Branches: Engineering departments, HODs, floor locations, and course offerings.
+
+    Args:
+        query: Raw user utterance string.
+
+    Returns:
+        List[Dict[str, Any]]: List of authoritative fact passages formatted for RAG evidence synthesis.
+    """
     facts = []
     q_lower = query.lower().strip()
 
@@ -191,9 +217,23 @@ def hybrid_search(
     use_vector: bool = True
 ) -> List[Dict[str, Any]]:
     """
-    Executes three-way hybrid retrieval across SQL structured tables, SQLite FTS5 keyword index,
-    and local semantic vector embeddings. Applies Reciprocal Rank Fusion (RRF) with authoritative
-    weight boosting to eliminate hallucinations and synthesize grounded institutional answers.
+    Executes three-way hybrid retrieval combining structured SQL facts, FTS5 BM25 text rank,
+    and ChromaDB vector embeddings using Reciprocal Rank Fusion (RRF).
+
+    Scoring Logic:
+      - SQL Structured Facts: Seed score `1.0 / (idx + 1) + 2.0` (authoritative boost).
+      - SQLite FTS5 Keyword Hits: Increments fusion score by `(1.0 / (60 + idx)) * 1.5`.
+      - Dense Semantic Vector Hits: Increments fusion score by `(1.0 / (60 + idx)) * 1.2`.
+
+    Args:
+        query: Search prompt or user question.
+        top_k: Maximum number of ranked passages to return (default: 4).
+        use_sql: Whether to query authoritative relational SQLite tables.
+        use_fts: Whether to query SQLite FTS5 full-text index.
+        use_vector: Whether to query ChromaDB dense vector store.
+
+    Returns:
+        List[Dict[str, Any]]: Top-K ranked passages sorted by descending fusion score.
     """
     candidates: Dict[str, Dict[str, Any]] = {}
 
@@ -257,7 +297,16 @@ def hybrid_search(
 
 
 def build_citations(retrieval_results: List[Dict[str, Any]]) -> List[CitationModel]:
-    """Generates structured citation instances without duplicate sources."""
+    """
+    Constructs deduplicated structured citation instances from retrieved passages.
+    Extracts document names, page numbers, sections, relevance scores, and concise text snippets.
+
+    Args:
+        retrieval_results: List of ranked candidate passages from hybrid search.
+
+    Returns:
+        List[CitationModel]: List of unique citation objects for UI display and audit verification.
+    """
     citations: List[CitationModel] = []
     seen_sources = set()
     for res in retrieval_results:
