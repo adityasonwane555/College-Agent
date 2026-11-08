@@ -1,7 +1,19 @@
 """
 BUDDY AI — SQLite Database Repository & Institutional Data Store
-Manages structured college records, SQLite FTS5 full-text indices,
-chunk vector persistence, document versioning, and pending lifecycle approvals.
+
+Architecture & Persistence Subsystem:
+  - Relational Schema & Automated Migrations:
+      - Houses core institutional entities: `faculty`, `departments`, `rooms`, `college_hours`, `events`, and `faqs`.
+      - Manages automatic dynamic schema migrations (e.g. faculty qualification, research profiles, event registration details)
+        using SQLite PRAGMA table inspection on startup.
+  - SQLite FTS5 Full-Text Keyword Indexing:
+      - Powers sub-millisecond BM25 keyword matching over document chunks via the `document_chunks_fts` virtual table.
+  - Document Versioning & Knowledge Lifecycle:
+      - Tracks SHA-256 file hashes, content types, and revision history in `document_versions`.
+      - Maintains `pending_knowledge_updates` table for human-in-the-loop administrative verification
+        before ingesting newly extracted institutional facts.
+  - Vector Embeddings Persistence:
+      - Stores dense document chunk embeddings in `chunk_vectors` to support hybrid RRF retrieval.
 """
 
 import sqlite3
@@ -15,17 +27,36 @@ from .models import (
 
 
 class DatabaseRepository:
+    """
+    Primary data access layer for Buddy AI.
+    Handles relational transactions, full-text queries, document metadata, and versioning.
+    """
     def __init__(self, db_path: Optional[str] = None):
+        """
+        Initializes the database repository, ensuring parent directories exist and schemas are migrated.
+
+        Args:
+            db_path: Optional filesystem path to SQLite file; defaults to settings.DATABASE_PATH.
+        """
         self.db_path = db_path or settings.DATABASE_PATH
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.init_db()
 
     def get_connection(self) -> sqlite3.Connection:
+        """
+        Opens a new SQLite database connection with row factory configured to sqlite3.Row.
+
+        Returns:
+            sqlite3.Connection: Active database connection.
+        """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 
     def init_db(self):
+        """
+        Initializes database tables, creates SQLite FTS5 virtual index, and executes migrations.
+        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -557,7 +588,18 @@ class DatabaseRepository:
             return cursor.fetchone()[0]
 
     def search_chunks_fts(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Searches document chunks using SQLite FTS5 MATCH with ranking."""
+        """
+        Executes a BM25-ranked full-text search against the SQLite FTS5 virtual table.
+        Sanitizes search tokens and falls back to SQL LIKE if syntax errors occur.
+
+        Args:
+            query: User's keyword search prompt.
+            limit: Maximum number of matched chunks to return.
+
+        Returns:
+            List[Dict[str, Any]]: List of matching chunks containing document_name,
+                                  section_title, content, and BM25 rank score.
+        """
         clean_q = "".join(c if c.isalnum() or c.isspace() else " " for c in query).strip()
         if not clean_q:
             return []
