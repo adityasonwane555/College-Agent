@@ -1,3 +1,21 @@
+"""
+BUDDY AI — High-Speed Receptionist Fast-Path Decision Engine
+
+Architecture & Intent Routing:
+  - Ultra-Low Latency (<10ms):
+      - Intercepts high-frequency reception desk inquiries (identity, admissions, leadership, departments,
+        placements, fees, campus facilities) and resolves them deterministically without LLM network roundtrips.
+  - Natural Dialogue Synthesis:
+      - Produces fluent, conversational prose structured for voice playback rather than rigid bullet points.
+      - Automatically attaches verified institutional `CitationModel` instances for auditability.
+  - Strict Whole-Word Boundary Matching:
+      - Employs regex boundaries (`\\b...\\b`) across sanitized query strings to eliminate false positives
+        (e.g., ensuring "it" triggers Information Technology only in explicit course/dept contexts and never on "Aditya").
+  - Selective Pass-Through:
+      - Leaves conversational greetings and self-introductions ("My name is...") untouched so the LLM
+        orchestrator can maintain genuine rapport.
+"""
+
 import re
 from typing import Optional, Dict, Any, List
 from ..database.repository import repo
@@ -5,7 +23,16 @@ from ..database.models import CitationModel
 
 
 def _word_in_clean(word: str, clean_text: str) -> bool:
-    """Checks if a whole word exists in clean text with word boundaries."""
+    """
+    Checks if an exact whole word occurs within sanitized lowercase text.
+
+    Args:
+        word: Target token string.
+        clean_text: Sanitized lowercase string without punctuation.
+
+    Returns:
+        bool: True if word matches with regex word boundaries.
+    """
     return bool(re.search(r'\b' + re.escape(word) + r'\b', clean_text))
 
 
@@ -14,6 +41,20 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
     Evaluates incoming query for high-frequency reception desk intents at APCOER Pune.
     Returns immediate, human-sounding dialogue responses with citations in <10ms,
     avoiding robotic bullet points or chatbot data dumps.
+
+    Supported Reception Domains:
+      1. College Identity & Heritage (ABMSP Trust Estd. 1907, SPPU affiliation, DTE 6794).
+      2. Leadership (Principal Dr. Sunil B. Thakare, VP Prof. Shrikant B. Jagtap).
+      3. Engineering Branches (Comp, AI&DS, IT, Mech, Civil, E&TC, MCA).
+      4. Admissions, Cutoffs & Fee Structures (CAP rounds, TFWS, DTE Code 6794).
+      5. Training & Placements (Recruiters, TPO cabin, packages).
+      6. Campus Navigation & Timings (Principal Office Room 101, Central Library, TBI, Hostel, Canteen).
+
+    Args:
+        user_query: Raw user utterance string.
+
+    Returns:
+        Optional[Dict[str, Any]]: Dictionary with 'response' and 'citations', or None if query requires LLM.
     """
     q = user_query.strip().lower()
     clean = re.sub(r'[^a-z0-9\s]', '', q)
