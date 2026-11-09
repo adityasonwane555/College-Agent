@@ -1,10 +1,34 @@
+"""
+BUDDY AI — Agent Tool Registry & Function Calling Dispatcher
+
+Architecture & Tool Execution:
+  - Function Calling Interface:
+      - Exposes unified JSON schema declarations (`OLLAMA_TOOLS_SCHEMA`) compatible with OpenAI,
+        Ollama, Groq, and Google Gemini function-calling endpoints.
+  - Tool Domains:
+      1. College Institutional Tools:
+         - `search_faq`: FAQs on fees, scholarships, hostels, certificates, and admissions.
+         - `get_department`: Academic branches, HODs, floor locations, and curricula.
+         - `get_room`: Navigation to administrative offices, labs, and auditoriums.
+         - `get_faculty`: Directory search for cabin locations, designations, and emails.
+         - `get_college_hours`: Operational schedules for gates, library, and admin desks.
+         - `get_upcoming_events`: Approved symposiums, hackathons, and placement drives.
+         - `get_announcements`: Official circulars, exam notices, and student updates.
+         - `search_college_documents`: BM25 and vector retrieval over prospectus files.
+      2. External Tools:
+         - `search_internet`: Live search engine querying for fresh world knowledge.
+  - Dynamic Dispatcher:
+      - Inspects callable signatures (`inspect.iscoroutinefunction`) to transparently execute both
+        synchronous database lookups and asynchronous network search coroutines.
+"""
+
 import inspect
 from typing import Dict, Any, Callable, List
 from ..tools import college_tools
 from ..tools import web_tools
 
 
-# Registered Tool Functions
+# Registered Tool Functions Mapping
 TOOL_FUNCTIONS: Dict[str, Callable] = {
     "search_faq": college_tools.search_faq,
     "get_department": college_tools.get_department,
@@ -159,7 +183,17 @@ OLLAMA_TOOLS_SCHEMA: List[Dict[str, Any]] = [
 
 
 async def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Any:
-    """Executes a registered tool with validation and error handling."""
+    """
+    Executes a registered tool function with runtime validation and safe error handling.
+    Automatically detects and awaits async coroutine tools (e.g. web search).
+
+    Args:
+        tool_name: Registered identifier of the tool.
+        arguments: Key-value parameters passed by the LLM function call.
+
+    Returns:
+        Any: Tool output data structure (string, dictionary with citations, or error message).
+    """
     func = TOOL_FUNCTIONS.get(tool_name)
     if not func:
         return f"Error: Tool '{tool_name}' is not registered."
