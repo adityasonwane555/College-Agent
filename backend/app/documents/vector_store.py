@@ -1,8 +1,18 @@
 """
 BUDDY AI 2.0 — Local Persistent Vector Store & Semantic Embeddings
-Provides an offline vector search engine using numpy and SQLite persistence.
-Supports multilingual subword / n-gram neural hashing, cosine similarity ranking,
-and graceful fallback when vector indexing encounters an issue.
+
+Architecture & Vector Engine:
+  - Zero-Dependency Multilingual Vectorizer:
+      - Uses deterministic subword (3-gram and 4-gram) feature hashing to project text into a 128-dimensional space.
+      - Provides seamless out-of-the-box support for English, Hindi, and Marathi (Devanagari script)
+        without requiring external cloud APIs or bulky PyTorch models.
+  - Cosine Similarity Dot-Product Search:
+      - Computes L2-normalized dense embeddings, reducing cosine similarity calculations to high-speed numpy dot products.
+  - Persistent SQLite Backing:
+      - Stores serialized float vectors directly in SQLite's `chunk_vectors` table, ensuring instantaneous
+        cold boots without re-embedding files on server restart.
+  - Index Synchronization:
+      - `rebuild_all_indexes` simultaneously updates the SQLite FTS5 index and dense vector store from approved chunks.
 """
 
 import math
@@ -25,12 +35,24 @@ class LocalMultilingualVectorizer:
     supporting English, Hindi, and Marathi (Devanagari script).
     """
     def __init__(self, dimensions: int = VECTOR_DIMENSIONS):
+        """
+        Initializes the vectorizer with fixed target dimensions.
+
+        Args:
+            dimensions: Dimensionality of output embedding space (default: 128).
+        """
         self.dimensions = dimensions
 
     def embed_text(self, text: str) -> List[float]:
         """
         Generates dense vector embeddings using word and character n-gram hashing.
         Applies L2 normalization to enable fast cosine similarity via dot product.
+
+        Args:
+            text: Plain text passage or search query.
+
+        Returns:
+            List[float]: L2-normalized float embedding list.
         """
         vec = np.zeros(self.dimensions, dtype=np.float32)
         if not text or not text.strip():
@@ -67,7 +89,16 @@ class LocalVectorStore:
         self.indexing_errors: List[str] = []
 
     def index_chunk(self, chunk_id: int, content: str) -> bool:
-        """Computes embedding for chunk and persists to database."""
+        """
+        Computes the dense embedding vector for a document chunk and persists it to SQLite.
+
+        Args:
+            chunk_id: Unique relational ID of the target document chunk.
+            content: Raw textual content of the chunk.
+
+        Returns:
+            bool: True if vector was successfully computed and persisted.
+        """
         try:
             embedding = self.vectorizer.embed_text(content)
             repo.save_chunk_vector(chunk_id, embedding, model_name="local_multilingual_vectorizer")
@@ -79,7 +110,15 @@ class LocalVectorStore:
             return False
 
     def index_document_chunks(self, document_name: str) -> int:
-        """Indexes all chunks for a given document."""
+        """
+        Indexes all text chunks belonging to a specific document.
+
+        Args:
+            document_name: Filename of the target document.
+
+        Returns:
+            int: Number of chunks successfully embedded and indexed.
+        """
         with repo.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, content FROM document_chunks WHERE document_name = ?", (document_name,))
@@ -94,7 +133,10 @@ class LocalVectorStore:
     def rebuild_all_indexes(self) -> Dict[str, Any]:
         """
         Rebuilds both full-text (FTS5) and semantic vector indexes from scratch
-        using approved documents and chunks in the database.
+        using approved documents and chunks currently stored in the database.
+
+        Returns:
+            Dict[str, Any]: Rebuilding summary report with indexed chunk counts and error logs.
         """
         self.indexing_errors.clear()
         # 1. Sync FTS5
@@ -120,8 +162,15 @@ class LocalVectorStore:
 
     def search(self, query: str, top_k: int = 5, threshold: float = 0.15) -> List[Dict[str, Any]]:
         """
-        Searches chunks via cosine similarity using numpy.
-        Returns ranked passages with metadata.
+        Performs dense vector similarity search across all indexed chunks using numpy dot product.
+
+        Args:
+            query: User's search query or topic.
+            top_k: Maximum number of closest candidate passages to return (default: 5).
+            threshold: Minimum cosine similarity score threshold (default: 0.15).
+
+        Returns:
+            List[Dict[str, Any]]: Ranked list of matching chunks with similarity scores and metadata.
         """
         q_vec = np.array(self.vectorizer.embed_text(query), dtype=np.float32)
         q_norm = np.linalg.norm(q_vec)
