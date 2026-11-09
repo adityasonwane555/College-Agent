@@ -1,3 +1,25 @@
+"""
+BUDDY AI 2.0 — System Configuration & Environment Settings
+
+Architecture & Configuration Structure:
+  - Base Directory & File Storage:
+      - Automatically locates workspace root and initializes persistent data/ and data/uploads/ folders.
+  - Multi-Model LLM Hierarchy:
+      - Local Ollama Engine: On-device reasoning (default: qwen2.5:3b) with configurable timeouts and local-first routing.
+      - Cloud Google Gemini API: Ultra-fast online grounding and multi-turn extraction (default: gemini-3.5-flash-lite).
+      - Cloud Groq API: High-throughput open-weight models (default: openai/gpt-oss-120b).
+      - Deterministic Fast Path & Mock Fallback: Low-latency campus directory lookup and safe simulation fallback.
+  - Speech Recognition & Synthesis:
+      - Faster-Whisper: GPU CUDA-accelerated STT supporting English, Hindi, and Marathi.
+      - Dual TTS Architecture: Edge-TTS for cloud low-latency neural synthesis, Fish Audio (API & local GGUF) for expressive robotic speech.
+  - Hardware Actuation & Network Control:
+      - ESP32-S3 Wi-Fi micro-service endpoints for RGB LED ring/matrix, ST7789 TFT display, MAX98357A I2S audio, and INMP441 I2S microphone.
+  - Knowledge Base & Relational Data:
+      - Persistent SQLite path resolution with automatic fallback to data/buddy.db.
+  - Security & Access Control:
+      - Admin authentication credentials and JWT signing secrets.
+"""
+
 import os
 from pathlib import Path
 from pydantic import field_validator
@@ -13,6 +35,12 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):
+    """
+    Central Pydantic Settings container loaded from workspace environment variables (.env).
+    Provides strictly typed configurations for AI inference engines, hardware peripherals,
+    speech subsystems, and database persistence.
+    """
+
     # Ollama Local AI Configuration (Primary On-Device Engine)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:3b"
@@ -39,6 +67,10 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_PATH", mode="after")
     @classmethod
     def resolve_database_path(cls, v: str) -> str:
+        """
+        Ensures the SQLite database path resolves to an absolute path, prioritizing
+        the workspace 'data/buddy.db' location even if relative paths are passed in environment files.
+        """
         p = Path(v)
         if not p.is_absolute():
             # Resolve relative to root workspace dir
