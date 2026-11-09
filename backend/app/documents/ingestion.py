@@ -1,7 +1,18 @@
 """
-BUDDY AI 2.0 — Universal Ingestion Entry Point
-Maintains backwards compatibility for ingest_text_file and ingest_pdf_file
-while connecting to the modular universal processor registry and lifecycle manager.
+BUDDY AI 2.0 — Universal Document Ingestion & Chunking Subsystem
+
+Architecture & Ingestion Pipeline:
+  - Unified File Ingestion Gateway:
+      - Routes heterogeneous file uploads (PDF, DOCX, TXT, CSV, HTML, Audio, Images) through
+        the modular `processor_registry` and `lifecycle_manager`.
+      - Maintains backwards-compatible contracts for `ingest_text_file` and `ingest_pdf_file`.
+  - Section-Aware Semantic Chunking:
+      - `chunk_text` intelligently partitions raw text streams around explicit `SECTION:` headings,
+        preserving logical context boundaries and page numbers without fragmenting sentences.
+  - Lifecycle Integration:
+      - Generates cryptographic SHA-256 file hashes to detect content modifications.
+      - Indexes chunks into both SQLite FTS5 for BM25 keyword matching and ChromaDB for vector retrieval.
+      - Manages administrative approval workflows and audit version increments.
 """
 
 import re
@@ -21,7 +32,19 @@ except ImportError:
 
 
 def chunk_text(text: str, page_number: int = 1, doc_name: str = "") -> List[Dict[str, Any]]:
-    """Chunks text into section-aware passages with page numbers."""
+    """
+    Partitions raw text into logical section-aware chunks for search indexing.
+    Respects explicit `SECTION:` delimiters and preserves page numbering.
+
+    Args:
+        text: Raw document text string.
+        page_number: Source page index (default: 1).
+        doc_name: Filename of the source document.
+
+    Returns:
+        List[Dict[str, Any]]: List of chunk dictionaries containing 'page_number',
+                              'section_title', and 'content'.
+    """
     chunks = []
     lines = text.split("\n")
     current_section = "General"
@@ -56,12 +79,30 @@ def chunk_text(text: str, page_number: int = 1, doc_name: str = "") -> List[Dict
 
 
 def ingest_universal_file(filepath: Path, auto_approve: bool = False, actor: str = "admin") -> Dict[str, Any]:
-    """Universal ingestion entry point for any supported document format."""
+    """
+    Universal ingestion entry point dispatching files to the appropriate processor.
+
+    Args:
+        filepath: Filesystem path to the input document.
+        auto_approve: Whether to bypass human review and immediately approve the document.
+        actor: Identity of the user or system initiating the ingestion.
+
+    Returns:
+        Dict[str, Any]: Ingestion status summary including document ID, file hash, and chunks created.
+    """
     return lifecycle_manager.process_and_ingest(filepath, auto_approve=auto_approve, actor=actor)
 
 
 def ingest_text_file(filepath: Path) -> Tuple[DocumentMetadataModel, List[Dict[str, Any]]]:
-    """Ingests a text file and returns metadata and chunks (preserves existing API contract)."""
+    """
+    Ingests a plain text file, generating metadata, section chunks, and search index entries.
+
+    Args:
+        filepath: Filesystem path to the text file.
+
+    Returns:
+        Tuple[DocumentMetadataModel, List[Dict[str, Any]]]: Document metadata model and list of chunk records.
+    """
     res = lifecycle_manager.process_and_ingest(filepath, auto_approve=True)
     doc_id = res.get("document_id")
     raw_doc = repo.get_document_by_id(doc_id) if doc_id else repo.get_document_by_name(filepath.name)
@@ -87,7 +128,15 @@ def ingest_text_file(filepath: Path) -> Tuple[DocumentMetadataModel, List[Dict[s
 
 
 def ingest_pdf_file(filepath: Path) -> Tuple[DocumentMetadataModel, List[Dict[str, Any]]]:
-    """Ingests a PDF file and returns metadata and chunks (preserves existing API contract)."""
+    """
+    Ingests a PDF document, extracting page text, section headers, and search index entries.
+
+    Args:
+        filepath: Filesystem path to the PDF document.
+
+    Returns:
+        Tuple[DocumentMetadataModel, List[Dict[str, Any]]]: Document metadata model and list of chunk records.
+    """
     res = lifecycle_manager.process_and_ingest(filepath, auto_approve=True)
     doc_id = res.get("document_id")
     raw_doc = repo.get_document_by_id(doc_id) if doc_id else repo.get_document_by_name(filepath.name)
@@ -113,7 +162,13 @@ def ingest_pdf_file(filepath: Path) -> Tuple[DocumentMetadataModel, List[Dict[st
 
 
 def ingest_sample_documents(samples_dir: Path):
-    """Automatically ingests all sample documents if present."""
+    """
+    Automatically scans and ingests all sample college documents (.txt) located in the target directory.
+    Executed during backend startup to guarantee out-of-the-box knowledge readiness.
+
+    Args:
+        samples_dir: Filesystem directory containing sample documentation.
+    """
     if not samples_dir.exists():
         return
     for file in samples_dir.glob("*.txt"):
