@@ -1,3 +1,35 @@
+"""
+BUDDY AI 2.0 — FastAPI REST Router & Hardware Gateway
+
+Architecture & Endpoints Overview:
+  - System Telemetry & Configuration:
+      - /api/health: Aggregated operational status of Ollama, Whisper STT, Fish Audio/Edge-TTS, and SQLite DB.
+      - /api/config: Public runtime parameters including active model tier, fallback flags, and language codes.
+  - Conversational Agent & Grounding:
+      - /api/chat: Central multi-turn dialog pipeline dispatching to Agent Orchestrator with RAG citations,
+        hardware LED state triggers ("THINKING"), and background TTS audio streaming to ESP32 speaker.
+  - Speech Services (STT & TTS):
+      - /api/voice/transcribe: Audio file upload pipeline powering Whisper speech-to-text.
+      - /api/voice/record-esp32: On-demand I2S audio capture from ESP32 INMP441 microphone over Wi-Fi.
+      - /api/voice/speak: Text-to-speech synthesis generating WAV/MP3 files and optional robot playback.
+      - /api/voice/audio/{filename}: Static audio streaming endpoint for synthesized WAV/MP3 files.
+  - College Knowledge & Directory:
+      - /api/college/departments, /events, /announcements, /hours, /faqs: Direct SQLite repository queries.
+  - Document Ingestion & Hybrid Retrieval:
+      - /api/documents/upload: Universal multi-format document parser with lifecycle review workflow.
+      - /api/documents/list & /search: Hybrid FTS5 BM25 full-text + dense vector semantic search.
+  - Admin Governance & Diagnostics:
+      - /api/admin/login: JWT token issuance for administrative routes.
+      - /api/admin/knowledge/pending, /approve, /reject: Staging lifecycle approval workflow.
+      - /api/admin/indexes/rebuild: Triggers simultaneous FTS5 and vector index rebuilds.
+      - /api/admin/diagnostics: Multi-provider latency and database integrity audit.
+  - Hardware Control & Audio Actuation:
+      - /api/hardware/led-state & /led-status: Direct RGB LED color/animation orchestration on ESP32-S3.
+      - /api/hardware/display: ST7789 TFT screen text/status updates.
+      - /api/hardware/chime: Auditory chime tone test on MAX98357A I2S amplifier.
+      - /api/hardware/stop-voice: Immediate audio cutoff and LED sync.
+"""
+
 import shutil
 import uuid
 from pathlib import Path
@@ -31,12 +63,14 @@ router = APIRouter(prefix="/api")
 
 # --- Request / Response Models ---
 class ChatRequest(BaseModel):
+    """Schema for incoming user chat messages and target audio playback device dispatch."""
     message: str
     session_id: Optional[str] = None
     audio_output_target: Optional[str] = "both"
 
 
 class ChatResponse(BaseModel):
+    """Schema for agent responses including grounded citations, simulation flags, and TTS metadata."""
     response: str
     session_id: str
     citations: List[CitationModel]
@@ -45,10 +79,12 @@ class ChatResponse(BaseModel):
 
 
 class SpeakRequest(BaseModel):
+    """Schema for standalone text-to-speech synthesis requests."""
     text: str
 
 
 class LedStateRequest(BaseModel):
+    """Schema for setting ESP32-S3 RGB LED animations and spectral audio amplitudes."""
     state: str
     amplitude: Optional[float] = 0.0
     bass: Optional[float] = None
@@ -57,11 +93,13 @@ class LedStateRequest(BaseModel):
 
 
 class DisplayMessageRequest(BaseModel):
+    """Schema for pushing notification headers and bodies to the ST7789 TFT display."""
     title: str
     body: str
 
 
 class AdminLoginRequest(BaseModel):
+    """Schema for administrative credential authentication."""
     username: str
     password: str
 
@@ -69,6 +107,10 @@ class AdminLoginRequest(BaseModel):
 # --- Health & Config Endpoints ---
 @router.get("/health")
 async def health_check():
+    """
+    Performs an aggregated system health audit across Ollama LLM, Faster-Whisper STT,
+    Fish Audio / Edge-TTS synthesis engines, SQLite database, and indexed documents.
+    """
     ollama_stat = await check_ollama_status()
     whisper_ready = is_whisper_installed()
     docs = repo.list_documents()
@@ -95,6 +137,7 @@ async def health_check():
 
 @router.get("/config")
 def get_public_config():
+    """Returns public runtime configurations for frontend initialization and client feature flags."""
     return {
         "model_name": settings.OLLAMA_MODEL,
         "stt_language": settings.STT_LANGUAGE,
@@ -106,7 +149,9 @@ def get_public_config():
 
 
 def _stream_audio_to_esp32_bg(audio_path_str: str):
-    """Decodes and streams TTS audio file to the ESP32 MAX98357A speaker."""
+    """
+    Background worker that decodes and streams TTS audio files to the ESP32 MAX98357A I2S amplifier over Wi-Fi.
+    """
     try:
         p = Path(audio_path_str)
         if p.exists():
@@ -119,6 +164,13 @@ def _stream_audio_to_esp32_bg(audio_path_str: str):
 # --- Chat Endpoint ---
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest, background_tasks: BackgroundTasks):
+    """
+    Main conversational endpoint:
+    1. Sets hardware RGB LED state to 'THINKING'.
+    2. Dispatches query to Agent Orchestrator (fast-path heuristics, hybrid RAG, multi-turn LLM).
+    3. Triggers voice synthesis and schedules asynchronous streaming to ESP32 MAX98357A speaker if requested.
+    4. Returns grounded response with structured citations and playback metadata.
+    """
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
@@ -159,6 +211,10 @@ async def chat_endpoint(req: ChatRequest, background_tasks: BackgroundTasks):
 # --- Voice Endpoints ---
 @router.post("/voice/transcribe")
 async def transcribe_voice(audio: UploadFile = File(...)):
+    """
+    Accepts an uploaded client audio recording, persists to temporary storage, and transcribes
+    using Faster-Whisper with automatic multilingual language detection (English/Hindi/Marathi).
+    """
     if not audio:
         raise HTTPException(status_code=400, detail="No audio file received.")
 
@@ -220,6 +276,9 @@ async def record_esp32_mic(seconds: int = 4):
 
 @router.post("/voice/speak")
 def speak_endpoint(req: SpeakRequest, background_tasks: BackgroundTasks):
+    """
+    Synthesizes input text into speech and enqueues audio streaming to the ESP32 speaker.
+    """
     res = synthesize_speech(req.text)
     if res.get("enabled") and res.get("file_path"):
         background_tasks.add_task(_stream_audio_to_esp32_bg, res["file_path"])
@@ -228,7 +287,7 @@ def speak_endpoint(req: SpeakRequest, background_tasks: BackgroundTasks):
 
 @router.post("/hardware/stream-audio")
 def stream_audio_to_speaker(audio_url: str, background_tasks: BackgroundTasks):
-    """Streams an existing audio URL file directly to the ESP32 MAX98357A speaker."""
+    """Streams an existing audio URL file directly to the ESP32 MAX98357A speaker in background."""
     filename = Path(audio_url).name
     target = AUDIO_DIR / filename
     if not target.exists():
@@ -240,6 +299,7 @@ def stream_audio_to_speaker(audio_url: str, background_tasks: BackgroundTasks):
 @router.get("/voice/audio/{filename}")
 @router.head("/voice/audio/{filename}")
 def serve_audio(filename: str):
+    """Serves synthesized WAV or MP3 audio files directly to clients or hardware players."""
     file_path = AUDIO_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found.")
@@ -250,26 +310,31 @@ def serve_audio(filename: str):
 # --- College Information Endpoints ---
 @router.get("/college/departments")
 def get_departments():
+    """Returns the complete directory of academic and administrative college departments."""
     return repo.list_departments()
 
 
 @router.get("/college/events")
 def get_events():
+    """Returns the verified calendar of upcoming college seminars, workshops, and festivals."""
     return repo.get_upcoming_events()
 
 
 @router.get("/college/announcements")
 def get_announcements():
+    """Returns the latest active administrative and academic announcements."""
     return repo.get_announcements()
 
 
 @router.get("/college/hours")
 def get_hours():
+    """Returns operating schedules for campus departments, libraries, and administrative offices."""
     return repo.get_college_hours()
 
 
 @router.get("/college/faqs")
 def get_faqs():
+    """Returns curated frequently asked questions regarding admissions, academics, and facilities."""
     return repo.list_faqs()
 
 
@@ -280,6 +345,12 @@ async def upload_document(
     auto_approve: bool = False,
     authenticated: bool = Depends(verify_admin_token)
 ):
+    """
+    Uploads and ingests universal multi-format college documents (PDF, DOCX, TXT, CSV, JSON):
+    - Validates file extensions and prevents directory traversal attacks.
+    - Generates semantic overlapping chunks and extracts calendar events automatically.
+    - Routes content to pending admin review or immediately activates indexing if auto_approve is True.
+    """
     safe_name = sanitize_filename(file.filename or "document.txt")
     dest_path = UPLOAD_DIR / safe_name
     with open(dest_path, "wb") as buffer:
@@ -315,11 +386,16 @@ async def upload_document(
 
 @router.get("/documents/list")
 def list_documents():
+    """Lists all uploaded and ingested knowledge documents in the repository."""
     return repo.list_documents()
 
 
 @router.get("/documents/search")
 def search_documents_endpoint(query: str, top_k: int = 5):
+    """
+    Performs hybrid retrieval combining FTS5 BM25 keyword matching with dense vector dot-product scoring,
+    and returns citations formatted for LLM attribution.
+    """
     results = hybrid_search(query, top_k=top_k)
     citations = build_citations(results)
     return {
@@ -333,6 +409,7 @@ def search_documents_endpoint(query: str, top_k: int = 5):
 # --- Admin Authentication & Management ---
 @router.post("/admin/login")
 def admin_login(req: AdminLoginRequest):
+    """Authenticates administrative credentials and returns a secure JWT bearer token."""
     token = authenticate_admin(req.username, req.password)
     return {"status": "authenticated", "token": token}
 
@@ -340,11 +417,13 @@ def admin_login(req: AdminLoginRequest):
 # --- Admin Knowledge Approval & Lifecycle Endpoints ---
 @router.get("/admin/knowledge/pending")
 def list_pending_knowledge_updates(auth: bool = Depends(verify_admin_token)):
+    """Lists all unapproved document ingestion diffs awaiting admin verification."""
     return repo.list_pending_updates(status="pending")
 
 
 @router.post("/admin/knowledge/approve/{update_id}")
 def approve_knowledge_update(update_id: int, auth: bool = Depends(verify_admin_token)):
+    """Approves a staged document diff and incorporates it into the active knowledge base."""
     success = repo.approve_pending_update(update_id, reviewer="admin")
     if not success:
         raise HTTPException(status_code=404, detail="Pending update not found or already processed.")
@@ -353,6 +432,7 @@ def approve_knowledge_update(update_id: int, auth: bool = Depends(verify_admin_t
 
 @router.post("/admin/knowledge/reject/{update_id}")
 def reject_knowledge_update(update_id: int, auth: bool = Depends(verify_admin_token)):
+    """Rejects a staged document diff and marks it rejected without modifying active indexes."""
     success = repo.reject_pending_update(update_id, reviewer="admin")
     if not success:
         raise HTTPException(status_code=404, detail="Pending update not found.")
@@ -361,17 +441,20 @@ def reject_knowledge_update(update_id: int, auth: bool = Depends(verify_admin_to
 
 @router.get("/admin/knowledge/versions")
 def list_document_versions_endpoint(document_id: Optional[int] = None, auth: bool = Depends(verify_admin_token)):
+    """Retrieves version history and audit logs for tracked documents."""
     return repo.list_document_versions(document_id=document_id)
 
 
 @router.post("/admin/indexes/rebuild")
 def rebuild_indexes_endpoint(auth: bool = Depends(verify_admin_token)):
+    """Forces a complete rebuild of both FTS5 full-text and semantic vector stores from approved chunks."""
     res = vector_store.rebuild_all_indexes()
     return res
 
 
 @router.get("/admin/diagnostics")
 async def get_system_diagnostics(auth: bool = Depends(verify_admin_token)):
+    """Gathers end-to-end latency, health stats across LLM providers, and vector indexing audit reports."""
     health = await provider_manager.get_all_health()
     pending = repo.list_pending_updates()
     docs = repo.list_documents()
@@ -385,36 +468,42 @@ async def get_system_diagnostics(auth: bool = Depends(verify_admin_token)):
 
 @router.post("/admin/faq")
 def add_faq(faq: FAQModel, auth: bool = Depends(verify_admin_token)):
+    """Creates or updates a curated FAQ item in the database."""
     faq_id = repo.add_faq(faq)
     return {"status": "created", "id": faq_id}
 
 
 @router.post("/admin/department")
 def add_department(dept: DepartmentModel, auth: bool = Depends(verify_admin_token)):
+    """Adds or updates an academic department record."""
     dept_id = repo.add_department(dept)
     return {"status": "saved", "id": dept_id}
 
 
 @router.post("/admin/room")
 def add_room(room: RoomModel, auth: bool = Depends(verify_admin_token)):
+    """Adds or updates a campus room or laboratory mapping record."""
     room_id = repo.add_room(room)
     return {"status": "saved", "id": room_id}
 
 
 @router.post("/admin/faculty")
 def add_faculty(fac: FacultyModel, auth: bool = Depends(verify_admin_token)):
+    """Adds or updates a faculty profile record."""
     fac_id = repo.add_faculty(fac)
     return {"status": "saved", "id": fac_id}
 
 
 @router.post("/admin/event")
 def add_event(event: EventModel, auth: bool = Depends(verify_admin_token)):
+    """Publishes a verified calendar event to the database."""
     event_id = repo.add_event(event)
     return {"status": "saved", "id": event_id}
 
 
 @router.post("/admin/announcement")
 def add_announcement(ann: AnnouncementModel, auth: bool = Depends(verify_admin_token)):
+    """Broadcasts a campus-wide administrative announcement."""
     ann_id = repo.add_announcement(ann)
     return {"status": "saved", "id": ann_id}
 
@@ -422,7 +511,7 @@ def add_announcement(ann: AnnouncementModel, auth: bool = Depends(verify_admin_t
 # --- Hardware RGB LED Endpoints ---
 @router.post("/hardware/led-state")
 def set_hardware_led(req: LedStateRequest):
-    """Updates the ESP32-S3 onboard RGB LED state over local Wi-Fi."""
+    """Updates the ESP32-S3 onboard RGB LED state over local Wi-Fi with audio frequency amplitude metadata."""
     success = rgb_controller.set_state(
         req.state,
         req.amplitude or 0.0,
@@ -475,4 +564,3 @@ def stop_hardware_voice(target_state: str = "IDLE", reset_state: Any = True):
     rgb_controller.set_state(target)
     esp_res = esp32_client.stop_speaker(target_state=target)
     return {"ok": True, "state": target, "esp32_stopped": esp_res}
-
