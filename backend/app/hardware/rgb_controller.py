@@ -1,7 +1,21 @@
 """
-BUDDY AI - Hardware RGB LED Controller Client
-Communicates with the ESP32-S3 over local Wi-Fi to synchronize the onboard WS2812 RGB LED
-with the real-time AI speech, thought, and listening states.
+BUDDY AI 2.0 — Hardware RGB LED Controller Client
+
+Architecture & Concurrency Design:
+  - Non-Blocking Background Transmission:
+      - Uses a dedicated daemon thread (BuddyLedWorker) and threading.Event coordination to dispatch HTTP requests.
+      - set_state() enqueues updates in <0.1ms, guaranteeing that voice synthesis, audio playback, and LLM reasoning
+        are never blocked by network latency or ESP32 response times.
+  - State Normalization & Transition Table:
+      - Translates high-level conversation milestones (e.g. COMPLETED_SPEECH, DONE, HAPPY) into canonical hardware states:
+        BOOTING, IDLE, LISTENING, THINKING, SPEAKING, INTERRUPTED, ERROR.
+  - Audio Reactivity & 3-Band Spectral Pulsing:
+      - Accepts overall RMS amplitude and normalized sub-bands (bass, mid, treble) for real-time visualization of speech waveforms.
+  - Bandwidth Optimization & Duplicate Suppression:
+      - Automatically suppresses identical rapid duplicate states within a 3.0-second window to prevent network congestion.
+  - Fault Tolerance & Auto-Discovery Synchronization:
+      - Fail-soft operation: errors are logged as warnings and never bubble up to user-facing voice flows.
+      - Dynamically synchronizes its base_url if the companion esp32_client discovers a new IP on the subnet.
 """
 
 import sys
@@ -29,8 +43,8 @@ VALID_STATES = {
 
 class RGBController:
     """
-    Non-blocking PC client that dispatches state updates to the ESP32-S3 over Wi-Fi.
-    All network transmissions occur asynchronously in a background thread/task to
+    Non-blocking PC client that dispatches visual state updates to the ESP32-S3 over Wi-Fi.
+    All network transmissions occur asynchronously in a background thread to
     guarantee zero latency impact on audible speech playback or AI processing.
     """
 
@@ -41,6 +55,15 @@ class RGBController:
         timeout: Optional[float] = None,
         token: Optional[str] = None
     ):
+        """
+        Initializes the RGBController and starts the background worker thread.
+
+        Args:
+            base_url: Base HTTP URL of the ESP32 (defaults to settings.ESP32_LED_URL).
+            enabled: Master switch for LED hardware actuation.
+            timeout: HTTP timeout in seconds for state dispatch.
+            token: Optional authorization token header.
+        """
         self.base_url = (base_url or settings.ESP32_LED_URL).rstrip("/")
         self.enabled = settings.ESP32_LED_ENABLED if enabled is None else enabled
         self.timeout = settings.ESP32_LED_TIMEOUT_SECONDS if timeout is None else timeout
@@ -65,7 +88,7 @@ class RGBController:
             self._start_worker()
 
     def _start_worker(self):
-        """Starts background worker thread for non-blocking HTTP dispatch."""
+        """Spawns the background worker thread for non-blocking HTTP dispatch if not already running."""
         if self._worker_thread is None or not self._worker_thread.is_alive():
             self._stop_event.clear()
             self._worker_thread = threading.Thread(
@@ -76,7 +99,7 @@ class RGBController:
             self._worker_thread.start()
 
     def _worker_loop(self):
-        """Dedicated background thread that dispatches queued state changes."""
+        """Dedicated background thread loop that dispatches queued state changes over HTTP."""
         while not self._stop_event.is_set():
             # Wait until new state update is queued
             self._has_work.wait(timeout=0.5)
@@ -107,7 +130,19 @@ class RGBController:
         mid: Optional[float] = None,
         treble: Optional[float] = None
     ) -> bool:
-        """Performs synchronous HTTP POST to ESP32 /api/state."""
+        """
+        Executes a synchronous HTTP POST request to the ESP32 /api/state endpoint.
+
+        Args:
+            state: Hardware state string.
+            amplitude: Overall RMS audio amplitude.
+            bass: Optional bass spectral energy.
+            mid: Optional mid spectral energy.
+            treble: Optional treble spectral energy.
+
+        Returns:
+            bool: True if ESP32 acknowledged with HTTP 200.
+        """
         if not self.enabled:
             return False
 
@@ -152,7 +187,18 @@ class RGBController:
             return False
 
     def normalize_state(self, state: str) -> str:
-        """Normalizes and validates incoming state string."""
+        """
+        Validates and canonicalizes raw state strings into hardware-supported values.
+
+        Args:
+            state: Input state string from dialog or audio pipeline.
+
+        Returns:
+            str: Canonical state string.
+
+        Raises:
+            ValueError: If state cannot be mapped to a recognized hardware mode.
+        """
         s = state.strip().upper()
         if s in ("COMPLETED_SPEECH", "FINISHED", "DONE", "COMPLETED", "INTERRUPTED", "HAPPY"):
             return "IDLE"
@@ -171,6 +217,16 @@ class RGBController:
         """
         Non-blocking API: Enqueues a state update and returns immediately (<0.1ms).
         Ensures the AI voice playback and reasoning pipelines are never stalled.
+
+        Args:
+            state: Target operational state name.
+            amplitude: Overall RMS audio amplitude (0.0 to 1.0).
+            bass: Optional bass spectral level.
+            mid: Optional mid spectral level.
+            treble: Optional treble spectral level.
+
+        Returns:
+            bool: True if state was successfully queued or deduplicated.
         """
         try:
             norm_state = self.normalize_state(state)
@@ -207,11 +263,25 @@ class RGBController:
         return True
 
     async def set_state_async(self, state: str, amplitude: float = 0.0) -> bool:
-        """Asynchronous coroutine wrapper for non-blocking state updates."""
+        """
+        Asynchronous coroutine wrapper for non-blocking state updates.
+
+        Args:
+            state: Target operational state name.
+            amplitude: Overall RMS audio amplitude (0.0 to 1.0).
+
+        Returns:
+            bool: True if queued.
+        """
         return self.set_state(state, amplitude)
 
     def get_status(self) -> Dict[str, Any]:
-        """Returns local controller status and connectivity to the ESP32."""
+        """
+        Returns local controller telemetry and connectivity status to the ESP32.
+
+        Returns:
+            Dict[str, Any]: Status dictionary containing active state, error logs, and connectivity.
+        """
         return {
             "enabled": self.enabled,
             "configured_url": self.base_url,
@@ -223,7 +293,12 @@ class RGBController:
         }
 
     def test_connection(self) -> Dict[str, Any]:
-        """Actively pings ESP32-S3 /health and /api/status endpoints to verify hardware."""
+        """
+        Actively pings ESP32-S3 /health and /api/status endpoints to verify hardware reachability.
+
+        Returns:
+            Dict[str, Any]: Verification report with device data and connectivity status.
+        """
         if not self.enabled:
             return {"ok": False, "message": "ESP32 LED Controller is disabled in configuration."}
 
@@ -254,7 +329,7 @@ class RGBController:
             return {"ok": False, "message": f"Cannot reach ESP32 at {self.base_url}: {e}"}
 
     def close(self):
-        """Shuts down background worker thread."""
+        """Gracefully shuts down the background worker thread."""
         self._stop_event.set()
         self._has_work.set()
         if self._worker_thread and self._worker_thread.is_alive():
@@ -267,12 +342,15 @@ rgb_controller = RGBController()
 
 # Convenience module-level functions
 def set_led_state(state: str, amplitude: float = 0.0) -> bool:
+    """Convenience helper to set LED state on the global rgb_controller singleton."""
     return rgb_controller.set_state(state, amplitude)
 
 
 async def set_led_state_async(state: str, amplitude: float = 0.0) -> bool:
+    """Convenience async helper to set LED state on the global rgb_controller singleton."""
     return await rgb_controller.set_state_async(state, amplitude)
 
 
 def get_led_status() -> Dict[str, Any]:
+    """Convenience helper to retrieve telemetry from the global rgb_controller singleton."""
     return rgb_controller.get_status()
