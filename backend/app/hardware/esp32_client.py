@@ -1,11 +1,18 @@
 """
-BUDDY AI — ESP32-S3 Hardware Client (PC Side)
-Provides complete integration between the PC AI Agent and the ESP32-S3:
-- RGB LED animations & audio-reactive modulation
-- ST7789 TFT display updates (robot expressions, status cards, answers)
-- Streaming audio playback from PC to MAX98357A speaker
-- Fetching audio captures from INMP441 microphone for Whisper transcription
-- Self-healing auto-discovery across local Wi-Fi subnet & mDNS
+BUDDY AI 2.0 — ESP32-S3 Hardware Client (PC Side)
+
+Architecture & Hardware Peripheral Integration:
+  - Microcontroller Transport & Network Protocol:
+      - Communicates with the ESP32-S3 over local Wi-Fi via lightweight HTTP REST endpoints.
+      - Enforces 'Connection: close' semantics to prevent single-threaded ESP32 WebServer socket exhaustion.
+      - Implements dual-phase network auto-discovery combining mDNS (buddy.local) and local subnet ARP scanning.
+  - Actuation & Audio Streaming Subsystems:
+      - MAX98357A I2S Audio Amplifier: Streams 24kHz 16-bit mono signed PCM with dynamic timeout calculations
+        proportional to playback duration and thread-safe streaming cancellation.
+      - INMP441 I2S Microphone: On-demand 16kHz audio recording capture over Wi-Fi with automatic RIFF WAVE packaging.
+      - ST7789 SPI TFT Display: Text, status cards, and facial expression updates rendered at 40MHz SPI.
+      - WS2812 RGB LED Ring/Matrix: Synchronizes visual states and 3-band audio reactivity (bass, mid, treble).
+      - Hardware Chime Generation: Auditory confirmation tones synthesized directly on the DAC.
 """
 
 import io
@@ -21,11 +28,23 @@ logger = logging.getLogger("buddy.hardware.esp32")
 
 
 class ESP32Client:
+    """
+    PC-side hardware client for orchestrating the companion ESP32-S3 microcontroller.
+    Provides audio streaming, microphone recording, display rendering, and automatic network discovery.
+    """
+
     def __init__(
         self,
         base_url: Optional[str] = None,
         timeout: float = 5.0
     ):
+        """
+        Initializes the ESP32 hardware client.
+
+        Args:
+            base_url: Base HTTP URL of the ESP32-S3 (defaults to settings.ESP32_LED_URL).
+            timeout: Default HTTP socket timeout in seconds.
+        """
         self.base_url = (base_url or settings.ESP32_LED_URL).rstrip("/")
         self.timeout = timeout
         self.is_connected = False
@@ -38,7 +57,10 @@ class ESP32Client:
         """
         Polls the ESP32-S3 /health endpoint to verify network reachability,
         WiFi signal strength (RSSI), battery voltage, and free heap memory.
-        Auto-discovers the ESP32 if the configured IP is unreachable.
+        Automatically triggers network auto-discovery if the configured IP is unreachable.
+
+        Returns:
+            Dict[str, Any]: Device telemetry dictionary or offline status report.
         """
         try:
             with httpx.Client(timeout=min(self.timeout, 2.5)) as client:
@@ -60,8 +82,11 @@ class ESP32Client:
 
     def discover_esp32(self) -> Optional[Dict[str, Any]]:
         """
-        Locates the ESP32-S3 via mDNS (buddy.local) or local subnet ARP candidates.
+        Locates the ESP32-S3 via mDNS (buddy.local) or local subnet ARP table candidates.
         Automatically updates base_url and synchronizes RGBController upon finding the board.
+
+        Returns:
+            Optional[Dict[str, Any]]: Telemetry payload from newly discovered device, or None if undiscovered.
         """
         candidates = ["http://buddy.local"]
         try:
@@ -107,7 +132,19 @@ class ESP32Client:
         mid: Optional[float] = None,
         treble: Optional[float] = None
     ) -> bool:
-        """Updates robot state (IDLE, LISTENING, THINKING, SPEAKING, ERROR)."""
+        """
+        Updates robot visual state (IDLE, LISTENING, THINKING, SPEAKING, ERROR) and audio reactivity bands.
+
+        Args:
+            state: Target operational state string.
+            amplitude: Overall RMS audio amplitude (0.0 to 1.0).
+            bass: Low-frequency energy level.
+            mid: Mid-frequency energy level.
+            treble: High-frequency energy level.
+
+        Returns:
+            bool: True if ESP32 acknowledged state transition with HTTP 200.
+        """
         payload = {
             "state": state,
             "amplitude": round(amplitude, 3),
@@ -128,7 +165,16 @@ class ESP32Client:
             return False
 
     def update_display(self, title: str, body: str) -> bool:
-        """Sends a message or announcement to the ST7789 display."""
+        """
+        Sends an informational card or announcement to the ST7789 TFT display.
+
+        Args:
+            title: Header / title string to render.
+            body: Body message or announcement text.
+
+        Returns:
+            bool: True if display successfully refreshed.
+        """
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.post(
@@ -142,7 +188,12 @@ class ESP32Client:
             return False
 
     def trigger_chime(self) -> bool:
-        """Triggers the ESP32 hardware chime tone test."""
+        """
+        Triggers the ESP32 hardware chime tone test via MAX98357A I2S DAC.
+
+        Returns:
+            bool: True if chime test succeeded.
+        """
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.post(
@@ -160,10 +211,17 @@ class ESP32Client:
         into signed 16-bit mono PCM and streams it directly to the ESP32 MAX98357A I2S DAC.
         
         Network & Audio Handling:
-        - Uses PyAV for fast hardware/software decoding and resamples to exactly 24 kHz mono.
-        - Employs dynamic stream timeout based on audio duration (length / byte_rate).
-        - Enforces 'Connection: close' to ensure single-threaded ESP32 WebServer releases socket.
-        - Features a non-blocking circuit breaker with brief 2.0s cooldown on failure.
+          - Uses PyAV for fast hardware/software decoding and resamples to exactly 24 kHz mono.
+          - Employs dynamic stream timeout based on audio duration (length / byte_rate).
+          - Enforces 'Connection: close' to ensure single-threaded ESP32 WebServer releases socket.
+          - Features a non-blocking circuit breaker with brief 2.0s cooldown on failure.
+
+        Args:
+            audio_bytes: Raw audio byte buffer (MP3 or WAV).
+            sample_rate: Target PCM sample rate in Hz (default: 24000).
+
+        Returns:
+            bool: True if audio stream was completely delivered to the speaker.
         """
         if time.time() - self._last_speaker_fail < 2.0:
             return False
@@ -229,7 +287,17 @@ class ESP32Client:
             return False
 
     def stop_speaker(self, target_state: str = "IDLE", reset_display: bool = True) -> bool:
-        """Immediately halts speech playback on ESP32 hardware and transitions display & LED."""
+        """
+        Immediately halts speech playback on ESP32 hardware and transitions display & LED.
+        Aborts any active HTTP chunked upload stream from the PC side and flushes ESP32 I2S DMA buffers.
+
+        Args:
+            target_state: Visual state to set after halting (default: "IDLE").
+            reset_display: Whether to return the ST7789 display to idle face mode.
+
+        Returns:
+            bool: True if stop signal was acknowledged.
+        """
         with self._streaming_lock:
             if self._active_stream_client:
                 try:
@@ -252,8 +320,14 @@ class ESP32Client:
 
     def fetch_mic_recording(self, seconds: int = 3) -> Optional[bytes]:
         """
-        Downloads a recorded WAV clip from the ESP32 INMP441 microphone.
+        Downloads a recorded WAV clip from the ESP32 INMP441 microphone over Wi-Fi.
         Supports both the dedicated /api/mic/record endpoint and chunked /api/mic fallback.
+
+        Args:
+            seconds: Duration of audio capture in seconds (default: 3).
+
+        Returns:
+            Optional[bytes]: RIFF WAVE formatted 16kHz audio buffer, or None on failure.
         """
         try:
             with httpx.Client(timeout=seconds + 8.0) as client:
@@ -281,6 +355,18 @@ class ESP32Client:
 
     @staticmethod
     def _create_wav(pcm_data: bytes, sample_rate: int = 16000, channels: int = 1, bits_per_sample: int = 16) -> bytes:
+        """
+        Wraps raw linear PCM audio bytes in a standard 44-byte RIFF/WAVE container.
+
+        Args:
+            pcm_data: Raw signed 16-bit PCM bytes.
+            sample_rate: Sampling frequency in Hz (default: 16000).
+            channels: Channel count (1 for mono, 2 for stereo).
+            bits_per_sample: Bit depth per sample (default: 16).
+
+        Returns:
+            bytes: Valid RIFF WAVE file binary.
+        """
         import struct
         data_size = len(pcm_data)
         riff_size = 36 + data_size
