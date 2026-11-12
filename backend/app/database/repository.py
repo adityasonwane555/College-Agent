@@ -1,4 +1,4 @@
-"""
+ """
 BUDDY AI — SQLite Database Repository & Institutional Data Store
 
 Architecture & Persistence Subsystem:
