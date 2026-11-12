@@ -13,7 +13,7 @@ Architecture & Intent Routing:
         (e.g., ensuring "it" triggers Information Technology only in explicit course/dept contexts and never on "Aditya").
   - Selective Pass-Through:
       - Leaves conversational greetings and self-introductions ("My name is...") untouched so the LLM
-        orchestrator can maintain genuine rapport. error
+        orchestrator can maintain genuine rapport.
 """
 
 import re
