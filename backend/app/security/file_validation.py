@@ -1,7 +1,19 @@
 """
-BUDDY AI 2.0 — File Validation, Security & Secret Redaction
-Validates uploaded files, prevents directory traversal, detects zip bombs,
-redacts potential secrets from source code / logs, and detects prompt injection attempts.
+BUDDY AI 2.0 — File Validation, Security Guardrails & Secret Redaction
+
+Architecture & Security Layers:
+  - Path Traversal & Filesystem Sanitization:
+      - Strips directory traversal vectors (../, null bytes, backslashes, leading hidden dots) from filenames.
+      - Enforces strict resolved path prefixes to protect against Zip-Slip attacks during archive extraction.
+  - Resource Protection & DoS Prevention:
+      - Enforces strict upper thresholds on standalone uploads (50MB) and uncompressed archive expansion (100MB).
+      - Computes streaming chunked SHA-256 hashes to verify document deduplication without unbounded memory usage.
+  - Automated Secret Redaction:
+      - Scans file contents and source code for credential leaks (Google Gemini keys, Groq API keys, OpenAI keys,
+        generic bearer tokens, passwords, and RSA/EC private keys) and masks them before storage or indexing.
+  - Anti-Prompt-Injection Safeguards:
+      - Scans untrusted uploaded documents and user inputs for instruction override patterns (e.g. 'ignore previous instructions',
+        'system override', 'disregard system prompt') to prevent indirect prompt injection vulnerabilities.
 """
 
 import os
@@ -39,7 +51,15 @@ INJECTION_PATTERNS = [
 
 
 def calculate_file_hash(data_or_path: bytes | Path | str) -> str:
-    """Calculates SHA-256 hash of file content or bytes."""
+    """
+    Computes a deterministic SHA-256 cryptographic hash of a file path or raw bytes buffer.
+
+    Args:
+        data_or_path: File path on disk or raw bytes payload.
+
+    Returns:
+        str: Lowercase 64-character hexadecimal SHA-256 digest string.
+    """
     sha256 = hashlib.sha256()
     if isinstance(data_or_path, (Path, str)):
         with open(data_or_path, "rb") as f:
@@ -53,7 +73,13 @@ def calculate_file_hash(data_or_path: bytes | Path | str) -> str:
 def sanitize_filename(filename: str) -> str:
     """
     Sanitizes and normalizes an uploaded file's basename to prevent directory traversal
-    and filesystem exploits. Strips null bytes, backslashes, and invalid characters.
+    and filesystem exploits. Strips null bytes, backslashes, path delimiters, and leading dots.
+
+    Args:
+        filename: Untrusted original filename from client upload headers.
+
+    Returns:
+        str: Cleaned, filesystem-safe alphanumeric filename.
     """
     base = os.path.basename(filename).strip()
     safe_name = re.sub(r'[^a-zA-Z0-9_\.\-]', '_', base)
@@ -63,7 +89,17 @@ def sanitize_filename(filename: str) -> str:
 
 
 def validate_file_size(filepath: Path, max_size_bytes: int = MAX_FILE_SIZE_BYTES):
-    """Enforces maximum file size on disk."""
+    """
+    Enforces maximum allowed file size on disk to protect against denial-of-service storage exhaustion.
+
+    Args:
+        filepath: Target file on disk to evaluate.
+        max_size_bytes: Maximum allowed size in bytes (default: 50MB).
+
+    Raises:
+        HTTPException(400): If the file does not exist on disk.
+        HTTPException(413): If file size exceeds the configured ceiling.
+    """
     if not filepath.exists():
         raise HTTPException(status_code=400, detail="Uploaded file does not exist.")
     size = filepath.stat().st_size
@@ -75,7 +111,17 @@ def validate_file_size(filepath: Path, max_size_bytes: int = MAX_FILE_SIZE_BYTES
 
 
 def is_safe_archive_path(base_dir: Path, target_path: Path) -> bool:
-    """Protects against zip slip / directory traversal inside archives."""
+    """
+    Protects against Zip-Slip vulnerabilities by verifying that the resolved target extraction
+    path resides strictly inside the intended destination directory.
+
+    Args:
+        base_dir: Intended extraction root directory.
+        target_path: Proposed destination path for an extracted archive entry.
+
+    Returns:
+        bool: True if safe, False if traversal outside base_dir is attempted.
+    """
     try:
         resolved_base = base_dir.resolve()
         resolved_target = target_path.resolve()
@@ -85,7 +131,16 @@ def is_safe_archive_path(base_dir: Path, target_path: Path) -> bool:
 
 
 def redact_secrets(text: str) -> Tuple[str, List[str]]:
-    """Scans and redacts detected credentials, keys, or passwords."""
+    """
+    Scans plain text or code passages for credential patterns (API keys, bearer tokens, passwords)
+    and replaces matching sensitive fragments with redacted placeholders.
+
+    Args:
+        text: Raw textual passage or document snippet.
+
+    Returns:
+        Tuple[str, List[str]]: Tuple of (redacted_text, list_of_warning_messages).
+    """
     warnings: List[str] = []
     redacted_text = text
     for pattern, replacement in SECRET_PATTERNS:
@@ -96,7 +151,15 @@ def redact_secrets(text: str) -> Tuple[str, List[str]]:
 
 
 def check_prompt_injection(text: str) -> Tuple[bool, Optional[str]]:
-    """Checks for prompt injection phrases in untrusted document text."""
+    """
+    Inspects document text or user input for adversarial prompt-override patterns.
+
+    Args:
+        text: Untrusted plain text passage.
+
+    Returns:
+        Tuple[bool, Optional[str]]: Tuple of (is_injection_detected, reason_message_or_None).
+    """
     for pattern in INJECTION_PATTERNS:
         match = pattern.search(text)
         if match:
