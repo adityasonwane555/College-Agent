@@ -1,7 +1,17 @@
 """
 BUDDY AI 2.0 — Knowledge Lifecycle, Versioning & Approval Policy
-Handles document uploads, duplicate detection, version history,
-diff tracking, pending update reviews, and derived index synchronization.
+
+Architecture & Lifecycle Workflow:
+  - Multi-Stage Document Ingestion Pipeline:
+      1. Validation & Integrity: Enforces file size limits and computes SHA-256 hashes to prevent duplicate ingestion.
+      2. Processor Extraction: Automatically routes documents to specialized parsers (PDF, DOCX, TXT, CSV, JSON).
+      3. Revision Tracking & Diffing: Detects revisions of existing filenames, increments version counters,
+         and compares extracted entities (e.g. event dates, venues) to produce human-readable diff summaries.
+      4. Human-in-the-Loop Governance:
+         - Consequential updates (such as event reschedules or faculty changes) are routed to staging tables
+           with a 'pending_review' status unless administrative auto-approve is explicitly enabled.
+      5. Derived Index Synchronization:
+         - Automatically rebuilds and synchronizes SQLite FTS5 full-text indexes and dense vector embeddings.
 """
 
 import json
@@ -23,7 +33,14 @@ class KnowledgeLifecycleManager:
     Orchestrates document ingestion pipelines, duplicate detection, content diffing,
     and human-in-the-loop review approvals for authoritative college knowledge bases.
     """
+
     def __init__(self, default_auto_approve: bool = False):
+        """
+        Initializes the lifecycle manager.
+
+        Args:
+            default_auto_approve: Whether newly ingested files bypass the staging review queue (default: False).
+        """
         self.default_auto_approve = default_auto_approve
 
     def process_and_ingest(
@@ -33,14 +50,23 @@ class KnowledgeLifecycleManager:
         actor: str = "admin"
     ) -> Dict[str, Any]:
         """
-        Full lifecycle processing for an uploaded file:
-        1. Validates size & path safety.
-        2. Detects exact duplicates via SHA-256 hash.
-        3. Parses format via appropriate processor.
-        4. Extracts structured knowledge (events, policies).
-        5. Tracks revisions / date changes if existing record exists.
-        6. Enforces approval policy (requires review for consequential changes).
-        7. Synchronizes FTS5 and vector indexes.
+        Executes end-to-end lifecycle processing for an uploaded file:
+        1. Validates file size and sanitizes the target filename.
+        2. Detects exact duplicates via SHA-256 hash comparison.
+        3. Parses format via appropriate processor in processor_registry.
+        4. Extracts structured knowledge entities (events, schedules, policies).
+        5. Computes revision diffs if an existing document with the same name exists.
+        6. Enforces approval policy (stages consequential changes for human review).
+        7. Synchronizes SQLite FTS5 and semantic vector stores.
+
+        Args:
+            filepath: Path to the uploaded document on disk.
+            auto_approve: Optional override to immediately approve the document into active search.
+            actor: User or role performing the ingestion action (default: "admin").
+
+        Returns:
+            Dict[str, Any]: Ingestion summary including document_id, version, lifecycle_status,
+                            diff_summary, extracted event details, and vector indexing telemetry.
         """
         validate_file_size(filepath)
         file_hash = calculate_file_hash(filepath)
@@ -184,4 +210,3 @@ class KnowledgeLifecycleManager:
 
 
 lifecycle_manager = KnowledgeLifecycleManager(default_auto_approve=False)
-
