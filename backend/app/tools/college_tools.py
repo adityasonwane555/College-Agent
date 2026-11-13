@@ -1,10 +1,34 @@
+"""
+BUDDY AI 2.0 — College Knowledge & Directory Toolset
+
+Architecture & Orchestration:
+  - Tool Invocation Dispatcher:
+      - Provides structured tool execution functions invoked by the Agent Orchestrator and Unified Provider
+        when answering student, visitor, and administrative campus queries.
+  - Authoritative Relational Grounding:
+      - Directly queries SQLite tables for deterministic entity data (departments, rooms, faculty, events,
+        announcements, campus hours, and FAQs), eliminating hallucination on verified college facts.
+  - Structured Retrieval & Attribution:
+      - Integrates hybrid semantic document search with verified source attribution, page references, and section metadata.
+  - Human-Readable & LLM-Friendly Formatting:
+      - Serializes query results into conversational strings optimized for direct model synthesis and speech output.
+"""
+
 from typing import Dict, Any, List
 from ..database.repository import repo
 from ..documents.retrieval import search_documents
 
 
 def search_faq(query: str) -> str:
-    """Search the official college frequently asked questions."""
+    """
+    Searches curated, official college frequently asked questions in the database.
+
+    Args:
+        query: Search keywords or question phrase from the user.
+
+    Returns:
+        str: Formatted list of matching Q&A entries, or a fallback notice if none found.
+    """
     results = repo.search_faq(query)
     if not results:
         return f"No official FAQs found matching query: '{query}'."
@@ -15,7 +39,15 @@ def search_faq(query: str) -> str:
 
 
 def get_department(name: str) -> str:
-    """Retrieve detailed information about a college academic department by name or code."""
+    """
+    Retrieves detailed directory information for an academic or administrative department by name or code.
+
+    Args:
+        name: Name (e.g. 'Computer Engineering') or short code (e.g. 'COMP').
+
+    Returns:
+        str: Department location, block, floor, HOD name, contact email, and academic overview.
+    """
     dept = repo.get_department(name)
     if not dept:
         return f"Department '{name}' was not found in the official college directory."
@@ -27,7 +59,15 @@ def get_department(name: str) -> str:
 
 
 def get_room(room_name: str) -> str:
-    """Find location, building, and purpose for a classroom, lab, auditorium, or administrative office."""
+    """
+    Finds physical location, building block, floor, and purpose for a classroom, lab, auditorium, or office.
+
+    Args:
+        room_name: Name or room number (e.g. 'Lab 301', 'Auditorium', 'Principal Office').
+
+    Returns:
+        str: Room title, room number, building, floor, and operational purpose.
+    """
     room = repo.get_room(room_name)
     if not room:
         return f"Room or facility '{room_name}' was not found in the campus location directory."
@@ -38,7 +78,16 @@ def get_room(room_name: str) -> str:
 
 
 def get_faculty(name: str) -> str:
-    """Look up faculty member details, department, cabin location, qualification, experience, areas of interest, and office consulting hours."""
+    """
+    Looks up faculty profiles including designation, department, cabin location, qualifications,
+    teaching experience, research interests, and office consultation hours.
+
+    Args:
+        name: Full or partial name of the faculty member or department role.
+
+    Returns:
+        str: Comprehensive biography, academic credentials, office hours, and contact details.
+    """
     members = repo.get_faculty(name)
     if not members:
         return f"No faculty member matching '{name}' was found in the official faculty directory."
@@ -60,7 +109,13 @@ def get_faculty(name: str) -> str:
 
 
 def get_college_hours() -> str:
-    """Retrieve operating hours for all campus facilities, library, administration, and labs."""
+    """
+    Retrieves official operating hours and weekly schedules for campus facilities, libraries,
+    administrative offices, and laboratories.
+
+    Returns:
+        str: Formatted facility schedules with opening times, closing times, and operational days.
+    """
     hours = repo.get_college_hours()
     if not hours:
         return "Operating hours are not currently recorded in the college database."
@@ -74,7 +129,13 @@ def get_college_hours() -> str:
 
 
 def get_upcoming_events() -> str:
-    """Retrieve upcoming college events, symposiums, hackathons, and placement drives."""
+    """
+    Retrieves the verified calendar of upcoming college seminars, workshops, technical symposiums,
+    cultural fests, and campus placement drives.
+
+    Returns:
+        str: Formatted event summaries with dates, venues, organizers, guest speakers, and registration details.
+    """
     events = repo.get_upcoming_events()
     if not events:
         return "There are no upcoming college events scheduled at this moment."
@@ -96,7 +157,12 @@ def get_upcoming_events() -> str:
 
 
 def get_announcements() -> str:
-    """Retrieve the latest official notices and circulars for students and faculty."""
+    """
+    Retrieves the latest official administrative circulars, examination notices, and campus broadcasts.
+
+    Returns:
+        str: Chronologically sorted notices with title, posting date, priority level, and body content.
+    """
     notices = repo.get_announcements()
     if not notices:
         return "There are no new college announcements posted right now."
@@ -109,7 +175,16 @@ def get_announcements() -> str:
 
 
 def search_college_documents(query: str) -> Dict[str, Any]:
-    """Search official college documents (prospectus, guides, handbooks) with verified citations."""
+    """
+    Searches indexed college documents (prospectus, syllabi, student guides, academic handbooks)
+    using hybrid search and generates verifiable citation passages.
+
+    Args:
+        query: Search query or topic keywords.
+
+    Returns:
+        Dict[str, Any]: Search outcome dictionary containing formatted passages and citation objects.
+    """
     results = search_documents(query, top_k=3)
     if not results:
         return {
