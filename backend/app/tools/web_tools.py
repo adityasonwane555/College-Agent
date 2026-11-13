@@ -1,3 +1,19 @@
+"""
+BUDDY AI 2.0 — External Web Research & Search Toolset
+
+Architecture & Search Strategy:
+  - Dual-Engine Fallback Pipeline:
+      - Primary Engine (SearXNG): Fast local/remote metasearch query returning structured JSON results.
+      - Secondary Engine (DuckDuckGo Lite): Zero-config public search fallback when local SearXNG is unavailable or offline.
+  - Security & SSRF Protection:
+      - Every extracted result URL is filtered through is_safe_url() to prevent Server-Side Request Forgery (SSRF),
+        local IP scraping (127.0.0.1, 192.168.x.x, 10.x.x.x), or internal network probing.
+  - HTML Cleansing & Noise Filtering:
+      - Strips scripts, styles, navigations, footers, and headers via BeautifulSoup to produce clean text snippets.
+  - Grounded Citation Assembly:
+      - Normalizes web search results into CitationModel dictionaries containing titles, source URLs, and contextual snippets.
+"""
+
 import httpx
 from typing import Dict, Any, List
 from bs4 import BeautifulSoup
@@ -6,7 +22,16 @@ from ..security.url_validation import is_safe_url
 
 
 def clean_html_content(html: str, max_chars: int = 1500) -> str:
-    """Extracts readable text from HTML safely."""
+    """
+    Extracts readable plain text from raw HTML content, removing scripts, stylesheets, and navigation tags.
+
+    Args:
+        html: Raw HTML string.
+        max_chars: Maximum character limit for output text (default: 1500).
+
+    Returns:
+        str: Cleaned, whitespace-normalized plain text snippet.
+    """
     try:
         soup = BeautifulSoup(html, "html.parser")
         # Remove script and style elements
@@ -21,7 +46,16 @@ def clean_html_content(html: str, max_chars: int = 1500) -> str:
 
 
 async def _search_searxng(query: str, num_results: int = 4) -> List[Dict[str, str]]:
-    """Attempts to query local/remote SearXNG instance."""
+    """
+    Queries the configured SearXNG metasearch instance via its JSON API.
+
+    Args:
+        query: User's search query string.
+        num_results: Maximum number of candidate results to return (default: 4).
+
+    Returns:
+        List[Dict[str, str]]: Parsed search results with title, url, and snippet fields.
+    """
     if not settings.SEARXNG_BASE_URL:
         return []
     search_url = f"{settings.SEARXNG_BASE_URL.rstrip('/')}/search"
@@ -45,7 +79,16 @@ async def _search_searxng(query: str, num_results: int = 4) -> List[Dict[str, st
 
 
 async def _search_duckduckgo(query: str, num_results: int = 4) -> List[Dict[str, str]]:
-    """Queries DuckDuckGo Lite for reliable, zero-config web search results."""
+    """
+    Scrapes DuckDuckGo Lite HTML interface as a zero-dependency fallback when SearXNG is unavailable.
+
+    Args:
+        query: User's search query string.
+        num_results: Maximum number of candidate results to return (default: 4).
+
+    Returns:
+        List[Dict[str, str]]: Extracted search results with title, url, and snippet fields.
+    """
     url = "https://lite.duckduckgo.com/lite/"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -78,8 +121,15 @@ async def _search_duckduckgo(query: str, num_results: int = 4) -> List[Dict[str,
 
 async def search_internet(query: str, num_results: int = 4) -> Dict[str, Any]:
     """
-    Performs external web search via SearXNG or DuckDuckGo.
-    Returns safe grounded search snippets with URLs for research.
+    Performs external web research using SearXNG with seamless failover to DuckDuckGo Lite.
+    Filters result URLs against SSRF threats and formats findings with grounded citations.
+
+    Args:
+        query: Search keywords or topic phrase.
+        num_results: Maximum number of verified results to return (default: 4).
+
+    Returns:
+        Dict[str, Any]: Search report containing aggregated content text, citations, and source metadata.
     """
     if not settings.WEB_SEARCH_ENABLED:
         return {
