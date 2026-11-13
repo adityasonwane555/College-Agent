@@ -1,8 +1,34 @@
+"""
+BUDDY AI 2.0 — Relational Knowledge & Agent Domain Schemas
+
+Architecture & Data Layer:
+  - Strongly-Typed Pydantic Models:
+      - Validates and serializes database entities, REST payloads, and internal agent state transitions.
+  - Relational Entity Schemas:
+      - FAQModel: Curated frequently asked questions with categorization.
+      - DepartmentModel: Academic and administrative departments with HOD, code, and location.
+      - RoomModel: Campus rooms, laboratories, and physical spaces with floor and building mapping.
+      - FacultyModel: Academic profiles, designations, office hours, and research expertise.
+      - CollegeHoursModel: Operational schedules and opening/closing intervals across facilities.
+      - EventModel: Verified campus events, symposiums, hackathons, and registration metadata.
+      - AnnouncementModel: Campus circulars with prioritized broadcast levels (Normal, High, Urgent).
+  - Document Lifecycle & Knowledge Staging:
+      - DocumentMetadataModel: Multi-format document tracking with SHA-256 integrity hashes and status.
+      - DocumentVersionModel: Audit logs for tracked document revisions and diff summaries.
+      - PendingKnowledgeModel: Unapproved extracted knowledge entities queued for administrative review.
+  - Conversational Grounding:
+      - CitationModel: Source attribution passages containing page, section, and relevance metrics.
+      - ChatMessageModel: Multi-turn dialog turns including roles, tool calls, and citations.
+"""
+
 from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
 class FAQModel(BaseModel):
+    """
+    Schema for curated campus frequently asked questions and official answers.
+    """
     id: Optional[int] = None
     question: str
     answer: str
@@ -10,6 +36,9 @@ class FAQModel(BaseModel):
 
 
 class DepartmentModel(BaseModel):
+    """
+    Schema for academic and administrative department records in the campus directory.
+    """
     id: Optional[int] = None
     name: str
     code: str
@@ -21,6 +50,9 @@ class DepartmentModel(BaseModel):
 
 
 class RoomModel(BaseModel):
+    """
+    Schema for campus classrooms, research laboratories, auditoriums, and administrative offices.
+    """
     id: Optional[int] = None
     room_number: str
     name: str
@@ -30,6 +62,9 @@ class RoomModel(BaseModel):
 
 
 class FacultyModel(BaseModel):
+    """
+    Schema for faculty member academic profiles, consultation hours, and contact details.
+    """
     id: Optional[int] = None
     name: str
     department: str
@@ -44,6 +79,9 @@ class FacultyModel(BaseModel):
 
 
 class CollegeHoursModel(BaseModel):
+    """
+    Schema for operational schedules across campus departments, libraries, and laboratories.
+    """
     id: Optional[int] = None
     facility_name: str
     open_time: str
@@ -53,6 +91,9 @@ class CollegeHoursModel(BaseModel):
 
 
 class EventModel(BaseModel):
+    """
+    Schema for official college events, conferences, symposiums, and placement drives.
+    """
     id: Optional[int] = None
     title: str
     date: str
@@ -73,6 +114,9 @@ class EventModel(BaseModel):
 
 
 class AnnouncementModel(BaseModel):
+    """
+    Schema for official circulars and campus broadcasts with priority classification.
+    """
     id: Optional[int] = None
     title: str
     content: str
@@ -81,6 +125,9 @@ class AnnouncementModel(BaseModel):
 
 
 class DocumentMetadataModel(BaseModel):
+    """
+    Schema for tracked knowledge documents, versioning counters, and SHA-256 integrity hashes.
+    """
     id: Optional[int] = None
     filename: str
     title: str
@@ -97,6 +144,9 @@ class DocumentMetadataModel(BaseModel):
 
 
 class DocumentVersionModel(BaseModel):
+    """
+    Schema for document version history, revision diff summaries, and modification audits.
+    """
     id: Optional[int] = None
     document_id: int
     version: int
@@ -109,6 +159,9 @@ class DocumentVersionModel(BaseModel):
 
 
 class PendingKnowledgeModel(BaseModel):
+    """
+    Schema for staged entities awaiting administrator verification before active indexing.
+    """
     id: Optional[int] = None
     document_id: Optional[int] = None
     entity_type: str  # event, faculty, department, general
@@ -123,6 +176,9 @@ class PendingKnowledgeModel(BaseModel):
 
 
 class CitationModel(BaseModel):
+    """
+    Schema for verifiable knowledge attribution citations attached to agent responses.
+    """
     source: str
     page: Optional[int] = None
     section: Optional[str] = None
@@ -131,6 +187,9 @@ class CitationModel(BaseModel):
 
 
 class ChatMessageModel(BaseModel):
+    """
+    Schema for multi-turn dialog history turns including roles, tool calls, and citations.
+    """
     role: str  # user, assistant, system, tool
     content: str
     name: Optional[str] = None
