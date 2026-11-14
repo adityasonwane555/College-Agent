@@ -1,3 +1,19 @@
+"""
+BUDDY AI 2.0 — Server-Side Request Forgery (SSRF) URL Security Validator
+
+Architecture & Threat Modeling:
+  - SSRF Mitigation:
+      - Validates all external target URLs before outbound network requests are dispatched by search or scraper tools.
+  - Multi-Stage Network Filtering:
+      - Protocol Enforcement: Permits only explicit 'http' and 'https' schemes; rejects file://, ftp://, gopher://, etc.
+      - Hostname Blacklisting: Prohibits loopback names ('localhost', '127.0.0.1', '::1', '0.0.0.0') and cloud metadata hostnames
+        ('metadata.google.internal', 'instance-data').
+      - Dynamic DNS Resolution & IP Inspection: Resolves hostnames to underlying IPv4/IPv6 addresses via socket.gethostbyname.
+      - RFC IP Range Enforcement: Uses python's ipaddress module to block private subnets (RFC 1918 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16),
+        loopback addresses (127.0.0.0/8), link-local autoconfiguration (169.254.0.0/16), and reserved spaces.
+      - Cloud Metadata Protection: Explicitly blocks direct IP requests to 169.254.169.254 (AWS, Azure, GCP metadata endpoints).
+"""
+
 import ipaddress
 import socket
 from urllib.parse import urlparse
@@ -16,8 +32,14 @@ BLOCKED_HOSTNAMES = {
 
 def is_safe_url(url: str) -> Tuple[bool, str]:
     """
-    Validates a URL against SSRF vulnerabilities.
-    Blocks private IP spaces (RFC 1918), loopback, link-local (169.254.x.x), and AWS/GCP metadata endpoints.
+    Validates an untrusted target URL against Server-Side Request Forgery (SSRF) vulnerabilities.
+    Blocks private IP spaces (RFC 1918), loopback, link-local (169.254.x.x), and cloud metadata endpoints.
+
+    Args:
+        url: Target web URL string to validate.
+
+    Returns:
+        Tuple[bool, str]: (is_safe, reason_or_status_message).
     """
     try:
         parsed = urlparse(url)
