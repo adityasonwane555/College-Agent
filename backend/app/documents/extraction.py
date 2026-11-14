@@ -1,7 +1,18 @@
 """
-BUDDY AI 2.0 — Structured Knowledge Extraction & Validation
-Extracts verified facts (Events, Faculty, Departments, Policies) from ingested documents.
-Guarantees that missing fields remain strictly None (no hallucinations).
+BUDDY AI 2.0 — Structured Knowledge Extraction & Anti-Hallucination Parsing
+
+Architecture & Extraction Heuristics:
+  - Deterministic Entity Extraction:
+      - Employs rule-based regex patterns and lexical boundary matchers to parse institutional calendar events
+        from unstructured text (PDF circulars, DOCX notices, spreadsheets, presentations).
+  - Strict Anti-Hallucination Guarantees:
+      - Missing or ambiguous fields (such as registration deadlines, guest names, or URLs) are strictly preserved as None.
+      - Never fabricates placeholder dates, venues, or contact details; records audit warnings when critical attributes are absent.
+  - Institutional Document Classification:
+      - Multi-label classifier categorizing text into Event Announcements, Faculty Records, Department Profiles,
+        Admission Notices, Exam Timetables, or Placement Reports.
+  - Structured Event Schema:
+      - Produces validated EventSchema models ready for staging in the knowledge lifecycle review queue.
 """
 
 import re
@@ -12,6 +23,10 @@ from .common import ExtractedDocument, DocumentType
 
 
 class EventSchema(BaseModel):
+    """
+    Strongly-typed validation model for institutional events, hackathons, and symposiums.
+    Guarantees that unstated fields remain None to eliminate LLM hallucination.
+    """
     event_id: Optional[str] = None
     title: str
     description: Optional[str] = None
@@ -43,7 +58,15 @@ class EventSchema(BaseModel):
 
 
 def classify_document(doc: ExtractedDocument) -> List[str]:
-    """Classifies document into relevant institutional categories."""
+    """
+    Classifies an extracted document into institutional knowledge categories using keyword matching.
+
+    Args:
+        doc: ExtractedDocument object containing plain text and source metadata.
+
+    Returns:
+        List[str]: Ranked list of matched categories (e.g. 'Event Announcement', 'Faculty Record').
+    """
     categories: List[str] = []
     text_lower = doc.extracted_text.lower()
 
@@ -67,9 +90,15 @@ def classify_document(doc: ExtractedDocument) -> List[str]:
 
 def extract_event_from_document(doc: ExtractedDocument) -> Optional[EventSchema]:
     """
-    Deterministic extraction of event information from documents.
-    Extracts dates, venues, guests, activities, and registration constraints.
-    Explicitly keeps missing fields as None.
+    Performs deterministic parsing of event metadata from document text.
+    Extracts dates, times, venues, guests, activities, and registration constraints.
+    Guarantees that missing or unmentioned attributes remain strictly None.
+
+    Args:
+        doc: ExtractedDocument object to analyze.
+
+    Returns:
+        Optional[EventSchema]: Populated EventSchema model if event information is found, otherwise None.
     """
     text = doc.extracted_text
     if not text:
