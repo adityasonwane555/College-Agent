@@ -1,7 +1,15 @@
 """
-Processor for Archive Inspection: .zip, .tar, .gz.
-Protects against zip bombs, path traversal, and malicious links.
-Extracts contained files safely and ingests them.
+BUDDY AI 2.0 — Compressed Archive Document Processor (.zip, .tar, .gz)
+
+Architecture & Security Sandbox:
+  - Decompression Quarantine:
+      - Expands archives inside isolated temporary directories, enforcing complete cleanup on completion.
+  - Zip-Slip Traversal Prevention:
+      - Validates every member path with is_safe_archive_path() to reject entries resolving outside target sandbox.
+  - Resource Denial-of-Service Defense:
+      - Enforces strict quotas against Zip bombs: MAX_ARCHIVE_EXPAND_BYTES (100MB) and MAX_ARCHIVE_FILE_COUNT (100).
+  - Sub-Document Pipeline Ingestion:
+      - Dispatches extracted inner files to appropriate format extractors and aggregates chunks into a unified document representation.
 """
 
 import os
@@ -22,6 +30,9 @@ from ...security.file_validation import (
 
 
 class ArchiveProcessor(BaseProcessor):
+    """
+    Secure archive extractor with Zip-Slip defense and expansion bounds checking.
+    """
     @property
     def supported_extensions(self) -> List[str]:
         return ["zip", "tar", "gz"]
@@ -31,6 +42,16 @@ class ArchiveProcessor(BaseProcessor):
         return DocumentType.ARCHIVE
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Safely inspects and extracts archive members within memory and quota boundaries.
+
+        Args:
+            filepath: Path to the target archive file on disk.
+            **kwargs: Optional extraction settings.
+
+        Returns:
+            ExtractedDocument: Aggregated document containing contents of all valid inner files.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
