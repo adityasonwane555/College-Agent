@@ -1,7 +1,16 @@
 """
-Processor for Source Code and Technical Files.
-Treats code strictly as reference material; NEVER executes code.
-Redacts credentials, parses docstrings and function/class signatures.
+BUDDY AI 2.0 — Source Code & Technical Script Processor
+
+Architecture & Technical Design:
+  - Static Reference Only (Zero Execution):
+      - Ingests source code solely as reference text; never interprets, evaluates, or compiles input scripts.
+  - Multi-Language Extension Mapping:
+      - Maps 17+ programming and configuration languages (Python, TypeScript, C++, Arduino INO, SQL, Shell, etc.).
+  - Security & Credential Redaction:
+      - Automatically masks hardcoded API keys, private keys, and passwords before indexing.
+      - Evaluates code comments and string literals against adversarial prompt injection patterns.
+  - Structural Signature Parsing:
+      - Identifies top-level functions, classes, and module docstrings to enrich semantic chunk metadata.
 """
 
 import re
@@ -36,6 +45,10 @@ LANGUAGE_MAP = {
 
 
 class CodeProcessor(BaseProcessor):
+    """
+    Static code extractor supporting multi-language lexical analysis,
+    secret redaction, and structural chunking without execution.
+    """
     @property
     def supported_extensions(self) -> List[str]:
         return list(LANGUAGE_MAP.keys())
@@ -45,6 +58,16 @@ class CodeProcessor(BaseProcessor):
         return DocumentType.CODE
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Extracts code text, redacts sensitive secrets, parses language signatures, and chunks by structure.
+
+        Args:
+            filepath: Path to the target source code file.
+            **kwargs: Optional parser arguments.
+
+        Returns:
+            ExtractedDocument: Standardized document with sanitized source code and metadata.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
