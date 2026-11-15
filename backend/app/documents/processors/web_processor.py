@@ -1,6 +1,16 @@
 """
-Processor for Web Markup documents: HTML, HTM, and XML.
-Extracts headings, paragraphs, and tables using BeautifulSoup.
+BUDDY AI 2.0 — Web Markup Document Processor (HTML, HTM, XML)
+
+Architecture & Parsing Pipeline:
+  - DOM Extraction & Noise Sanitization:
+      - Employs BeautifulSoup (lxml/html.parser) to strip non-informational elements (<script>, <style>, <nav>, <footer>, <header>).
+  - Structural Hierarchy:
+      - Parses document title, meta tags, heading hierarchies (h1-h6), paragraphs, and table contents.
+  - Security Guardrails:
+      - Passes extracted text through redact_secrets() to sanitize embedded API tokens.
+      - Scans content through check_prompt_injection() to prevent indirect prompt override vectors.
+  - Chunk Assembly:
+      - Uses sliding semantic chunking to generate retrievable passages for FTS5 full-text and vector indexing.
 """
 
 import time
@@ -19,6 +29,10 @@ except ImportError:
 
 
 class WebMarkupProcessor(BaseProcessor):
+    """
+    Universal extractor for web markup files (HTML, HTM, XML).
+    Parses semantic DOM trees, extracts text content, and verifies security constraints.
+    """
     @property
     def supported_extensions(self) -> List[str]:
         return ["html", "htm", "xml"]
@@ -28,6 +42,16 @@ class WebMarkupProcessor(BaseProcessor):
         return DocumentType.HTML
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Parses markup documents into structured plain text, headings, and searchable chunks.
+
+        Args:
+            filepath: Path to the target HTML/XML file on disk.
+            **kwargs: Optional parser configurations.
+
+        Returns:
+            ExtractedDocument: Standardized representation containing clean text, chunks, and metadata.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
