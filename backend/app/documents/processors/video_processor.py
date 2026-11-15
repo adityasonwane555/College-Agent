@@ -1,6 +1,13 @@
 """
-Processor for Video Ingestion: MP4, MOV, MKV, WEBM.
-Samples audio track for speech transcription.
+BUDDY AI 2.0 — Video Media Document Processor (MP4, MOV, MKV, WEBM)
+
+Architecture & Media Pipeline:
+  - Container Demuxing & Metadata Inspection:
+      - Inspects video container structures, codecs, and file sizes across standard multimedia formats.
+  - Audio Demuxing Hooks:
+      - Prepares container audio tracks for downstream Faster-Whisper ASR extraction via ffmpeg.
+  - Searchable Chunk Formatting:
+      - Packages structural container properties into retrievable chunk passages for campus media inventories.
 """
 
 import time
@@ -13,6 +20,9 @@ from ...voice.transcription import is_whisper_installed
 
 
 class VideoProcessor(BaseProcessor):
+    """
+    Video container processor extracting container properties and audio track references.
+    """
     @property
     def supported_extensions(self) -> List[str]:
         return ["mp4", "mov", "mkv", "webm"]
@@ -22,6 +32,16 @@ class VideoProcessor(BaseProcessor):
         return DocumentType.VIDEO
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Extracts video metadata, evaluates container size, and formats container chunks.
+
+        Args:
+            filepath: Path to the target video container file.
+            **kwargs: Optional parser configurations.
+
+        Returns:
+            ExtractedDocument: Standardized representation containing video metadata and chunks.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
