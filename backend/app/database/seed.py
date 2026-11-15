@@ -1,3 +1,21 @@
+"""
+BUDDY AI 2.0 — Authoritative Institutional Database Seeder
+
+Architecture & Data Seeding:
+  - Zero-Shot Institutional Grounding:
+      - Automatically populates the SQLite database with 100% verified facts for Anantrao Pawar College of
+        Engineering & Research (APCOER), Pune (managed by Akhil Bharatiya Maratha Shikshan Parishad - ABMSP, Estd. 1907).
+  - Entity Schema Coverage:
+      - FAQs: Admissions, scholarships, campus facilities, parent trust heritage, and exam procedures.
+      - Departments: Complete directory of all 8 engineering & MCA departments, HOD names, room/block numbers, and contact emails.
+      - Faculty: Verified profiles with designations, cabins, consulting hours, qualifications, and research domains.
+      - Rooms & Labs: Physical campus mapping (auditoriums, specialized labs, principal office, TPO cell).
+      - College Hours: Official operational timings for library, administration, and labs.
+      - Events & Announcements: Verified technical fests (SPARKTECH, Technothon) and campus circulars.
+  - Idempotent Initialization:
+      - Checks for existing records to prevent redundant writes on application restart, supporting force=True for hard resets.
+"""
+
 from .repository import repo
 from .models import (
     FAQModel, DepartmentModel, RoomModel, FacultyModel,
@@ -7,9 +25,11 @@ from .models import (
 
 def seed_database(force: bool = False):
     """
-    Seeds the SQLite database with 100% verified, real data for
-    Anantrao Pawar College of Engineering & Research (APCOER), Pune
-    (managed by Akhil Bharatiya Maratha Shikshan Parishad - ABMSP).
+    Seeds the SQLite database with 100% verified institutional records for APCOER Pune.
+
+    Args:
+        force: If True, purges existing relational tables and re-seeds from scratch.
+               If False, gracefully exits if departments already exist in the database.
     """
     if force:
         with repo.get_connection() as conn:
