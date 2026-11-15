@@ -1,6 +1,15 @@
 """
-Processor for Audio Ingestion: WAV, MP3, M4A, FLAC, OGG.
-Transcribes speech using faster-whisper pipeline.
+BUDDY AI 2.0 — Spoken Audio Document Processor (WAV, MP3, M4A, FLAC, OGG)
+
+Architecture & Speech Pipeline:
+  - Speech-to-Text Transcription:
+      - Transcribes uploaded audio recordings and podcasts using GPU-accelerated Faster-Whisper (CTranslate2).
+  - Multilingual Language Identification:
+      - Automatically detects Indian English, Hindi, and Marathi spoken audio.
+  - Transcript Redaction:
+      - Passes raw transcribed strings through redact_secrets() to sanitize verbalized tokens or numbers.
+  - Semantic Chunking:
+      - Segments audio transcripts into retrievable timestamped passages for knowledge indexing.
 """
 
 import time
@@ -13,6 +22,9 @@ from ...voice.transcription import transcribe_audio_file, is_whisper_installed
 
 
 class AudioProcessor(BaseProcessor):
+    """
+    Audio media processor integrating Faster-Whisper automatic speech recognition.
+    """
     @property
     def supported_extensions(self) -> List[str]:
         return ["wav", "mp3", "m4a", "flac", "ogg"]
@@ -26,6 +38,16 @@ class AudioProcessor(BaseProcessor):
         return True
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Transcribes speech audio into searchable document text and metadata.
+
+        Args:
+            filepath: Path to the target audio file on disk.
+            **kwargs: Optional transcription options.
+
+        Returns:
+            ExtractedDocument: Standardized representation containing transcribed text and chunks.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
