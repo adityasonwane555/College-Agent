@@ -1,6 +1,15 @@
 """
-Processor for Image Ingestion: PNG, JPG, JPEG, WEBP, TIFF, BMP.
-Extracts dimensions and EXIF metadata using Pillow; runs OCR if pytesseract is available.
+BUDDY AI 2.0 — Image & Visual Document Processor (PNG, JPG, WEBP, TIFF, BMP)
+
+Architecture & OCR Pipeline:
+  - Image Introspection & Metadata Extraction:
+      - Uses Pillow to extract image resolution, color profile, and embedded EXIF technical tags.
+  - Optical Character Recognition (OCR):
+      - Dispatches image frames to Tesseract OCR engine when available to extract printed and scanned text.
+  - Resilient Fallback:
+      - Automatically returns structural visual metadata if OCR binaries are uninstalled, logging actionable guidance.
+  - Text Sanitization:
+      - Filters raw OCR output through redact_secrets() to prevent scanning leaked credentials.
 """
 
 import time
@@ -24,6 +33,9 @@ except ImportError:
 
 
 class ImageProcessor(BaseProcessor):
+    """
+    Visual media processor providing Pillow dimension introspection and Tesseract OCR text extraction.
+    """
     @property
     def supported_extensions(self) -> List[str]:
         return ["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp"]
@@ -37,6 +49,16 @@ class ImageProcessor(BaseProcessor):
         return True
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Extracts visual resolution, color space, and OCR textual content from image assets.
+
+        Args:
+            filepath: Path to the image file on disk.
+            **kwargs: Optional OCR language configurations.
+
+        Returns:
+            ExtractedDocument: Extracted document with OCR transcriptions and image dimensions.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
