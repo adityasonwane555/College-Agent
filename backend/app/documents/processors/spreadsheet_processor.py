@@ -1,6 +1,16 @@
 """
-Processor for Tabular Data: CSV, TSV, and XLSX workbooks.
-Preserves header-to-value relationships and sheet metadata.
+BUDDY AI 2.0 — Tabular Spreadsheet Document Processor (CSV, TSV, XLSX)
+
+Architecture & Tabular Ingestion:
+  - Multi-Format Spreadsheet Engine:
+      - CSV & TSV: Uses standard Python csv.reader with automatic header row mapping and row-level record serialization.
+      - Excel Workbooks (.xlsx, .xls): Uses openpyxl with data_only=True to extract evaluated cell values across multi-sheet workbooks.
+  - Semantic Record Representation:
+      - Converts tabular rows into structured key-value dictionaries and descriptive semantic sentences
+        (e.g. 'Record #1: Code: COMP; Department: Computer Engineering; Floor: 3rd Floor').
+      - Chunks every record individually with sheet-name and row-index metadata for pinpoint RAG lookup.
+  - Security Scanning:
+      - Automatically sweeps cell text for leaked API keys, tokens, or credentials via redact_secrets().
 """
 
 import csv
@@ -19,15 +29,31 @@ except ImportError:
 
 
 class SpreadsheetProcessor(BaseProcessor):
+    """
+    Document processor specialized for structured tabular spreadsheets and workbooks.
+    """
+
     @property
     def supported_extensions(self) -> List[str]:
+        """List of file extensions supported by this tabular extractor."""
         return ["csv", "tsv", "xlsx", "xls"]
 
     @property
     def document_type(self) -> DocumentType:
+        """Standard DocumentType classification."""
         return DocumentType.CSV
 
     def _extract_csv(self, filepath: Path, delimiter: str = ",") -> tuple[str, List[Dict[str, Any]], List[ExtractedChunk]]:
+        """
+        Parses delimited text files (CSV or TSV) into structured row records and semantic chunks.
+
+        Args:
+            filepath: Path to the delimited file.
+            delimiter: Column delimiter character (default: ',').
+
+        Returns:
+            tuple: (full_text_representation, list_of_row_dictionaries, list_of_ExtractedChunks).
+        """
         sheets_data: Dict[str, Any] = {}
         rows_list: List[Dict[str, Any]] = []
         chunks: List[ExtractedChunk] = []
@@ -69,6 +95,18 @@ class SpreadsheetProcessor(BaseProcessor):
         return full_text, rows_list, chunks
 
     def _extract_xlsx(self, filepath: Path) -> tuple[str, Dict[str, List[Dict[str, Any]]], List[ExtractedChunk]]:
+        """
+        Parses Microsoft Excel workbooks across all worksheets, preserving sheet names and table rows.
+
+        Args:
+            filepath: Path to the Excel workbook.
+
+        Returns:
+            tuple: (full_text_representation, sheets_dictionary, list_of_ExtractedChunks).
+
+        Raises:
+            RuntimeError: If openpyxl is not installed.
+        """
         if not OPENPYXL_AVAILABLE:
             raise RuntimeError("openpyxl is not installed for Excel workbook extraction.")
 
@@ -130,6 +168,16 @@ class SpreadsheetProcessor(BaseProcessor):
         return "\n\n".join(full_text_parts), sheets_dict, chunks
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Parses CSV, TSV, or XLSX files into structured row chunks with secret sanitization.
+
+        Args:
+            filepath: Target file on disk.
+            **kwargs: Extra extraction parameters.
+
+        Returns:
+            ExtractedDocument: Populated document envelope containing structured tabular chunks.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
@@ -179,4 +227,3 @@ class SpreadsheetProcessor(BaseProcessor):
             warnings=list(set(warnings)),
             processing_duration_seconds=round(duration, 3)
         )
-
