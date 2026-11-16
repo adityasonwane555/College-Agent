@@ -1,3 +1,17 @@
+/**
+ * BUDDY AI 2.0 — Real-Time Conversational Status Indicator Component
+ *
+ * Architecture & UI State Mapping:
+ *   - Status Pill & Dynamic Typography:
+ *       - Translates the canonical RobotState into contextual user prompts and color-coordinated glowing badges:
+ *         * 'listening' -> Cyan (#00f0ff) prompt requesting speech input.
+ *         * 'thinking'  -> Purple (#c084fc) indicator for RAG retrieval and LLM inference.
+ *         * 'speaking'  -> Sky Blue (#38bdf8) active speech synthesis notification.
+ *         * 'happy'     -> Emerald (#34d399) success / helpful confirmation.
+ *         * 'error'     -> Rose (#f87171) diagnostic error guidance.
+ *         * 'idle'      -> Slate neutral welcoming greeting.
+ */
+
 import React from 'react';
 import type { RobotState } from '../types';
 
