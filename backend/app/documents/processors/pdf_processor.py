@@ -1,5 +1,15 @@
 """
-Processor for PDF documents using pypdf.
+BUDDY AI 2.0 — Portable Document Format (PDF) Processor
+
+Architecture & PDF Parsing:
+  - Library Integration:
+      - Utilizes PyPDF (PdfReader) for fast, zero-dependency on-device text and metadata extraction.
+  - Page-Level Attribution:
+      - Iterates across individual PDF pages, tagging extracted chunks with exact 1-indexed page numbers (page_number)
+        to enable precise citation referencing in user-facing answers.
+  - Multi-Layer Security:
+      - Sanitizes text through redact_secrets() to prevent storing embedded API keys or passwords.
+      - Inspects every extracted page for adversarial prompt-injection vectors via check_prompt_injection().
 """
 
 import time
@@ -18,15 +28,31 @@ except ImportError:
 
 
 class PdfProcessor(BaseProcessor):
+    """
+    Document processor specialized for Adobe Portable Document Format (.pdf) files.
+    """
+
     @property
     def supported_extensions(self) -> List[str]:
+        """List of lower-case file extensions supported by this extractor."""
         return ["pdf"]
 
     @property
     def document_type(self) -> DocumentType:
+        """Standard DocumentType classification."""
         return DocumentType.PDF
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Parses a PDF file page by page, executing security filters and chunking each page.
+
+        Args:
+            filepath: Path to the target PDF file on disk.
+            **kwargs: Additional extraction parameters.
+
+        Returns:
+            ExtractedDocument: Populated document envelope containing page-anchored chunks.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
@@ -85,4 +111,3 @@ class PdfProcessor(BaseProcessor):
             warnings=list(set(warnings)),
             processing_duration_seconds=round(duration, 3)
         )
-
