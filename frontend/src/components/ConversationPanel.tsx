@@ -1,15 +1,28 @@
 /**
- * BUDDY AI — Conversation Panel Component
- * Displays interactive chat dialogue, dynamic citation pills (web vs institutional),
- * source snippet inspection drawers, and automatic scroll-to-bottom mechanics.
+ * BUDDY AI 2.0 — Conversation Panel & Grounded Citation Drawer
+ *
+ * Architecture & UI Design:
+ *   - Dialogue Stream Rendering:
+ *       - Renders sequential conversational turns between user queries and robot responses.
+ *       - Automatically scrolls to the newest message upon turn completion.
+ *   - Grounded Citation Inspection:
+ *       - Visualizes verifiable RAG source pills (distinguishing institutional guides from web metasearch).
+ *       - Provides expandable snippet drawers showing page references, sections, and source excerpts.
+ *   - Session Management:
+ *       - Clean session clearing hook to purge dialog history and reset active conversation contexts.
  */
 
 import React, { useRef, useEffect, useState } from 'react';
 import type { ChatMessage } from '../types';
 import { BookOpen, User, Bot, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 
+/**
+ * Props for the ConversationPanel component.
+ */
 interface ConversationPanelProps {
+  /** Ordered list of dialog messages in active session. */
   messages: ChatMessage[];
+  /** Callback to clear conversation history. */
   onClearSession: () => void;
 }
 
