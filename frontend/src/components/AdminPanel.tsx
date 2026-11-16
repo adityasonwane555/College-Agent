@@ -1,9 +1,30 @@
+/**
+ * BUDDY AI 2.0 — Administrative Knowledge Management Panel
+ *
+ * Architecture & Administrative Workflow:
+ *   - Secure JWT Authentication:
+ *       - Authenticates against /api/admin/login and caches signed bearer tokens for session operations.
+ *   - Direct Knowledge Authoring:
+ *       - Interactive form controls for publishing FAQs, academic departments, and calendar events directly to SQLite.
+ *   - Universal Document Ingestion:
+ *       - Uploads institutional documents (PDF, DOCX, TXT, CSV) with optional staging review bypass.
+ *   - Human-in-the-Loop Review Dashboard:
+ *       - Lists pending document diffs with approve/reject controls to prevent unverified updates to active search indices.
+ *   - Index Rebuild Trigger:
+ *       - Initiates full SQLite FTS5 full-text and semantic vector index rebuilds on demand.
+ */
+
 import React, { useState } from 'react';
 import { api } from '../services/api';
 import { X, Lock, ShieldCheck, Plus, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 
+/**
+ * Props for the AdminPanel component.
+ */
 interface AdminPanelProps {
+  /** Callback invoked to dismiss the admin modal. */
   onClose: () => void;
+  /** Optional callback fired after knowledge records are created or updated. */
   onDataModified?: () => void;
 }
 
