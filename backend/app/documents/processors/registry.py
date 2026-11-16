@@ -1,6 +1,15 @@
 """
 BUDDY AI 2.0 — Modular Document Processor Registry
-Dispatches files to format-specific extractors with clear status for unsupported formats.
+
+Architecture & Dispatch Engine:
+  - Extensible Registry Pattern:
+      - Maintains an active catalog of 12 format-specific document processors (Text, PDF, DOCX, Spreadsheets,
+        Presentations, Structured Data, Web Markup, Code, Archives, Images, Audio, Video).
+  - Fast Extension Lookup:
+      - Maps lowercase file extensions to processor instances for O(1) resolution during upload.
+  - Graceful Fallback & Unsupported Format Handling:
+      - Yields a structured ExtractedDocument with IngestionStatus.FAILED and actionable diagnostic warnings
+        rather than raising unhandled exceptions on unsupported file types.
 """
 
 import time
@@ -24,17 +33,31 @@ from ...security.file_validation import calculate_file_hash, sanitize_filename
 
 
 class ProcessorRegistry:
+    """
+    Central dispatch registry that routes document files to their respective format processors.
+    """
+
     def __init__(self):
+        """
+        Initializes the registry and registers default extractors for all supported document types.
+        """
         self._processors: List[BaseProcessor] = []
         self._extension_map: Dict[str, BaseProcessor] = {}
         self._register_default_processors()
 
     def register(self, processor: BaseProcessor):
+        """
+        Registers an extractor instance and populates extension mappings for all supported formats.
+
+        Args:
+            processor: BaseProcessor instance to register.
+        """
         self._processors.append(processor)
         for ext in processor.supported_extensions:
             self._extension_map[ext.lower().strip()] = processor
 
     def _register_default_processors(self):
+        """Initializes and registers standard processors for PDF, Office, Text, Web, and Media formats."""
         self.register(TextProcessor())
         self.register(PdfProcessor())
         self.register(DocxProcessor())
@@ -49,17 +72,49 @@ class ProcessorRegistry:
         self.register(VideoProcessor())
 
     def get_processor(self, filepath_or_ext: str | Path) -> Optional[BaseProcessor]:
+        """
+        Resolves the appropriate BaseProcessor instance for a given file path or extension string.
+
+        Args:
+            filepath_or_ext: File path or raw extension string (e.g. 'pdf' or Path('doc.docx')).
+
+        Returns:
+            Optional[BaseProcessor]: Matching processor instance, or None if format is unsupported.
+        """
         ext = filepath_or_ext.suffix.lower().lstrip(".") if isinstance(filepath_or_ext, Path) else filepath_or_ext.lower().lstrip(".")
         return self._extension_map.get(ext)
 
     def is_supported(self, filepath_or_ext: str | Path) -> bool:
+        """
+        Checks whether an extractor exists for the given file path or extension.
+
+        Args:
+            filepath_or_ext: Target file path or extension.
+
+        Returns:
+            bool: True if supported, False otherwise.
+        """
         return self.get_processor(filepath_or_ext) is not None
 
     def list_supported_extensions(self) -> List[str]:
+        """
+        Returns a sorted list of all file extensions supported by currently registered processors.
+
+        Returns:
+            List[str]: Sorted list of lowercase file extensions.
+        """
         return sorted(list(self._extension_map.keys()))
 
     def process_file(self, filepath: Path) -> ExtractedDocument:
-        """Processes any file using the suitable format extractor or returns clear unsupported status."""
+        """
+        Processes any file on disk using the appropriate format extractor with error containment.
+
+        Args:
+            filepath: Path to the target document.
+
+        Returns:
+            ExtractedDocument: Extracted document envelope, marked FAILED with diagnostic warnings if unsupported.
+        """
         ext = filepath.suffix.lower().lstrip(".")
         processor = self.get_processor(ext)
         file_hash = calculate_file_hash(filepath)
@@ -95,4 +150,3 @@ class ProcessorRegistry:
 
 
 processor_registry = ProcessorRegistry()
-
