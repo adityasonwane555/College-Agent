@@ -1,16 +1,31 @@
 /**
- * BUDDY AI — useVoice Custom React Hook
- * Manages audio lifecycle, dual-microphone routing (ESP32 INMP441 vs local device),
- * speech recognition transcription, speech synthesis playback, and active cancellation.
+ * BUDDY AI 2.0 — useVoice Custom React Hook & Multimodal Audio Controller
+ *
+ * Architecture & Audio Routing:
+ *   - Dual-Microphone Input Pipeline:
+ *       - Dispatches between local browser MediaRecorder and hardware ESP32 INMP441 I2S microphone over Wi-Fi.
+ *       - Automatically degrades to local laptop microphone if the ESP32 physical node is unreachable.
+ *   - Dual-Speaker Output Routing:
+ *       - Dispatches synthesized audio to local browser HTML5 Audio, physical ESP32 MAX98357A I2S DAC, or both.
+ *   - Conversational State Machine:
+ *       - Coordinates state transitions (idle, listening, thinking, speaking, error) and triggers hardware LED syncing.
+ *   - Immediate Audio Interruption:
+ *       - Provides instant voice playback cancellation that halts both browser audio elements and ESP32 hardware streaming.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { api, API_HOST } from '../services/api';
 import type { RobotState } from '../types';
 
+/**
+ * Configuration options for the useVoice hook.
+ */
 interface UseVoiceOptions {
+  /** Callback fired when speech recognition produces final transcribed text. */
   onTranscriptionComplete: (text: string) => void;
+  /** Callback fired when conversational robot state updates. */
   onStateChange: (state: RobotState) => void;
+  /** Callback fired when an audio capture, network, or synthesis error occurs. */
   onError: (errMessage: string) => void;
 }
 
