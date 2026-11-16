@@ -1,5 +1,17 @@
 """
-Processor for Plain Text, Markdown, and RTF documents.
+BUDDY AI 2.0 — Plain Text & Markdown Document Processor
+
+Architecture & Text Extraction:
+  - Multi-Extension Compatibility:
+      - Ingests plain text (.txt), Markdown (.md, .markdown), Rich Text (.rtf), and log (.log) files.
+  - Section-Aware Semantic Chunking:
+      - Identifies Markdown headings (#, ##) and explicit section delimiters (SECTION:) to segment text logically
+        while preserving topic boundaries and avoiding arbitrary mid-sentence cuts.
+  - Security Guardrails:
+      - Automatically invokes redact_secrets() to filter out credentials before storage.
+      - Scans for prompt injection attacks via check_prompt_injection().
+  - Page-Split Markers:
+      - Parses synthetic page demarcation syntax (=== PAGE X ===) to support multi-page text documents.
 """
 
 import time
@@ -12,7 +24,17 @@ from ...security.file_validation import calculate_file_hash, redact_secrets, che
 
 
 def chunk_document_text(text: str, page_number: int = 1, default_section: str = "General") -> List[ExtractedChunk]:
-    """Splits text into section-aware chunks."""
+    """
+    Splits continuous text into section-aware chunks guided by Markdown headings and length thresholds.
+
+    Args:
+        text: Plain text passage to segment.
+        page_number: Document page index associated with this text block (default: 1).
+        default_section: Fallback section title when no heading is active (default: 'General').
+
+    Returns:
+        List[ExtractedChunk]: Sequenced list of parsed text chunks.
+    """
     chunks: List[ExtractedChunk] = []
     lines = text.split("\n")
     current_section = default_section
@@ -49,15 +71,31 @@ def chunk_document_text(text: str, page_number: int = 1, default_section: str = 
 
 
 class TextProcessor(BaseProcessor):
+    """
+    Document processor specialized for unstructured plain text and Markdown files.
+    """
+
     @property
     def supported_extensions(self) -> List[str]:
+        """File extensions supported by this text extractor."""
         return ["txt", "md", "markdown", "rtf", "log"]
 
     @property
     def document_type(self) -> DocumentType:
+        """Standard DocumentType classification."""
         return DocumentType.TXT
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Extracts content from plain text or Markdown files with security scanning and chunking.
+
+        Args:
+            filepath: Path to the target text file.
+            **kwargs: Extra runtime options.
+
+        Returns:
+            ExtractedDocument: Populated document structure with chunks and security warnings.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
