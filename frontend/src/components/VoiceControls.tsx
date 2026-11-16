@@ -1,3 +1,18 @@
+/**
+ * BUDDY AI 2.0 — Voice Interaction & Audio Device Controls Component
+ *
+ * Architecture & UI Interactions:
+ *   - Push-To-Talk & Click-To-Talk Hybrid:
+ *       - Tracks pointer down timestamps; holding the mic button initiates temporary recording (auto-stops on release),
+ *         while quick taps toggle continuous recording modes.
+ *   - Audio Input Source Switching:
+ *       - Allows on-the-fly toggling between local client browser microphone and physical ESP32 INMP441 Wi-Fi microphone.
+ *   - Audio Playback Output Routing:
+ *       - Dispatches synthesized voice audio to 'robot' (ESP32 MAX98357A I2S speaker), 'laptop' (browser audio element), or 'both'.
+ *   - Emergency Playback Halt:
+ *       - Displays prominent stop button during speech synthesis to immediately flush hardware DMA buffers and pause local audio.
+ */
+
 import React, { useRef } from 'react';
 import { Mic, Volume2, VolumeX, Square } from 'lucide-react';
 
