@@ -1,5 +1,25 @@
+/**
+ * BUDDY AI 2.0 — Frontend TypeScript Type Definitions
+ *
+ * Architecture & Client Contracts:
+ *   - Robot Visual & Emotional States:
+ *       - Defines canonical facial expression and LED modes: 'idle' | 'listening' | 'thinking' | 'speaking' | 'happy' | 'error'.
+ *   - Grounding & Citations:
+ *       - Structures attribution references attached to agent answers (source document, page, section, snippet).
+ *   - Telemetry & System Config:
+ *       - Models backend health status across Ollama, Whisper, TTS, and relational databases.
+ *   - Institutional Entities:
+ *       - Types for academic departments, campus events, announcements, and FAQs mirrored from SQLite schemas.
+ */
+
+/**
+ * Visual and operational state machine for the robot face and hardware LED indicators.
+ */
 export type RobotState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'happy' | 'error';
 
+/**
+ * Verifiable institutional citation reference linking answers to ingested documents.
+ */
 export interface Citation {
   source: string;
   page?: number;
@@ -8,6 +28,9 @@ export interface Citation {
   snippet: string;
 }
 
+/**
+ * Individual chat message entry rendered in the conversation log.
+ */
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
@@ -17,6 +40,9 @@ export interface ChatMessage {
   isSimulated?: boolean;
 }
 
+/**
+ * Operational telemetry report returned by the backend /api/health endpoint.
+ */
 export interface HealthStatus {
   status: string;
   service: string;
@@ -41,6 +67,9 @@ export interface HealthStatus {
   web_search_enabled: boolean;
 }
 
+/**
+ * Public runtime configurations exposed by the backend /api/config route.
+ */
 export interface AppConfig {
   model_name: string;
   stt_language: string;
@@ -50,6 +79,9 @@ export interface AppConfig {
   mock_fallback_active: boolean;
 }
 
+/**
+ * Academic or administrative department directory record.
+ */
 export interface Department {
   id?: number;
   name: string;
@@ -61,6 +93,9 @@ export interface Department {
   description: string;
 }
 
+/**
+ * Campus calendar event or symposium record.
+ */
 export interface CollegeEvent {
   id?: number;
   title: string;
@@ -71,6 +106,9 @@ export interface CollegeEvent {
   organizer: string;
 }
 
+/**
+ * Official administrative notice or circular.
+ */
 export interface CollegeAnnouncement {
   id?: number;
   title: string;
@@ -79,6 +117,9 @@ export interface CollegeAnnouncement {
   priority: string;
 }
 
+/**
+ * Curated frequently asked question and official response.
+ */
 export interface FAQ {
   id?: number;
   question: string;
@@ -86,6 +127,9 @@ export interface FAQ {
   category: string;
 }
 
+/**
+ * Metadata record for an ingested knowledge base document.
+ */
 export interface DocumentMeta {
   id?: number;
   filename: string;
