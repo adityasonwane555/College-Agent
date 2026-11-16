@@ -1,6 +1,15 @@
 """
-BUDDY AI 2.0 — College Document Retrieval Service
-Provides keyword extraction, relevance scoring, and hybrid search integration.
+BUDDY AI 2.0 — College Document Retrieval & Citation Assembly Service
+
+Architecture & Retrieval Ladder:
+  - Hybrid Orchestration:
+      - Dispatches queries to hybrid_search (combining SQLite FTS5 BM25 and dense vector dot-product scoring).
+  - Keyword Filtering & Lexical Overlap:
+      - Filters natural language stopwords while preserving essential institutional keywords (APCOER, ABMSP, Pune).
+  - Resilient Fallback:
+      - Falls back to raw SQL LIKE chunk matching when search indexes are cold or unpopulated.
+  - Strict Attribution:
+      - Enforces zero-hallucination citation formatting with document names, page indices, and relevance scores.
 """
 
 import re
@@ -18,7 +27,15 @@ STOP_WORDS = {
 
 
 def extract_keywords(query: str) -> List[str]:
-    """Extracts non-stopword alphanumeric search terms from query."""
+    """
+    Extracts non-stopword alphanumeric search terms from a natural language query.
+
+    Args:
+        query: User's raw question string.
+
+    Returns:
+        List[str]: Filtered list of search terms.
+    """
     words = re.findall(r"\b[a-zA-Z0-9_\-\.]{3,}\b", query.lower())
     filtered = [w for w in words if w not in STOP_WORDS]
     if not filtered:
@@ -27,7 +44,16 @@ def extract_keywords(query: str) -> List[str]:
 
 
 def calculate_score(query_terms: List[str], text: str) -> float:
-    """Calculates keyword overlap relevance score."""
+    """
+    Calculates normalized keyword term frequency relevance score.
+
+    Args:
+        query_terms: List of extracted keywords.
+        text: Candidate passage text.
+
+    Returns:
+        float: Term frequency score.
+    """
     if not query_terms:
         return 0.0
     text_lower = text.lower()
