@@ -1,5 +1,15 @@
 """
-Processor for Structured Data: JSON and YAML.
+BUDDY AI 2.0 — Structured Data Document Processor (JSON, YAML)
+
+Architecture & Structured Ingestion:
+  - Dual Parser Engine:
+      - JSON: Parses native JSON files with UTF-8 decoding and standard json.loads() error containment.
+      - YAML: Uses PyYAML safe_load() to prevent arbitrary Python object execution vulnerabilities.
+  - Hybrid Knowledge Transformation:
+      - Retains native hierarchical dictionaries in structured_content for programmatic tool access.
+      - Serializes formatted, indentation-normalized string blocks into chunks for full-text FTS5 and vector embedding.
+  - Secret Masking:
+      - Recursively sanitizes data text to mask credentials before storing in the database.
 """
 
 import json
@@ -19,15 +29,31 @@ except ImportError:
 
 
 class StructuredDataProcessor(BaseProcessor):
+    """
+    Document processor specialized for structured configuration and dataset files in JSON and YAML formats.
+    """
+
     @property
     def supported_extensions(self) -> List[str]:
+        """List of structured data file extensions supported by this extractor."""
         return ["json", "yaml", "yml"]
 
     @property
     def document_type(self) -> DocumentType:
+        """Standard DocumentType classification."""
         return DocumentType.JSON
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Parses JSON or YAML files into structured object trees and searchable text chunks.
+
+        Args:
+            filepath: Path to the target structured data file.
+            **kwargs: Extra extraction arguments.
+
+        Returns:
+            ExtractedDocument: Populated document envelope containing structured dictionary data and text chunks.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
@@ -96,4 +122,3 @@ class StructuredDataProcessor(BaseProcessor):
             warnings=list(set(warnings)),
             processing_duration_seconds=round(duration, 3)
         )
-
