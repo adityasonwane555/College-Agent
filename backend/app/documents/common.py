@@ -1,6 +1,13 @@
 """
 BUDDY AI 2.0 — Common Document Ingestion Models & Status Types
-Defines the standard internal representation for all ingested and processed documents.
+
+Architecture & Document Canonical Model:
+  - Universal Intermediate Representation (IR):
+      - Normalizes diverse file formats (PDF, DOCX, TXT, CSV, XLSX, PPTX, JSON, YAML, HTML, code) into a unified ExtractedDocument envelope.
+  - Chunk Data Contracts:
+      - Breaks large documents into serialized ExtractedChunk objects retaining original page numbers, section headers, and relational metadata.
+  - Lifecycle State Enumeration:
+      - Tracks document progression through UPLOADED, PROCESSING, PENDING_REVIEW, APPROVED, REJECTED, SUPERSEDED, and ARCHIVED.
 """
 
 from enum import Enum
@@ -10,6 +17,9 @@ from datetime import datetime
 
 
 class DocumentType(str, Enum):
+    """
+    Supported document format classifications handled by the processor registry.
+    """
     PDF = "pdf"
     DOCX = "docx"
     TXT = "txt"
@@ -30,6 +40,9 @@ class DocumentType(str, Enum):
 
 
 class IngestionStatus(str, Enum):
+    """
+    Lifecycle milestones for knowledge documents entering the repository.
+    """
     UPLOADED = "uploaded"
     PROCESSING = "processing"
     PENDING_REVIEW = "pending_review"
@@ -41,6 +54,9 @@ class IngestionStatus(str, Enum):
 
 
 class ExtractedChunk(BaseModel):
+    """
+    A segmented passage of text derived from a document, enriched with page and section anchors for RAG attribution.
+    """
     chunk_index: int
     page_number: int = 1
     section_title: str = "General"
@@ -49,6 +65,10 @@ class ExtractedChunk(BaseModel):
 
 
 class ExtractedDocument(BaseModel):
+    """
+    Canonical document envelope containing extracted full-text, structured JSON metadata,
+    and segmented chunk collections produced by format-specific processors.
+    """
     document_id: Optional[int] = None
     filename: str
     file_hash: str
@@ -65,4 +85,3 @@ class ExtractedDocument(BaseModel):
     processing_duration_seconds: float = 0.0
     created_at: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     version: int = 1
-
