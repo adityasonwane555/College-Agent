@@ -1,6 +1,16 @@
 """
-Processor for PowerPoint presentations (.pptx).
-Extracts slide ordering, titles, bullet contents, and presenter notes.
+BUDDY AI 2.0 — Presentation Document Processor (PPTX, PPT, ODP)
+
+Architecture & Slide Extraction:
+  - Library Integration:
+      - Employs python-pptx to inspect Microsoft PowerPoint OpenXML presentation archives.
+  - Slide Hierarchy & Note Extraction:
+      - Iterates through prs.slides sequentially, identifying title shapes versus content text frames.
+      - Extracts presenter notes from slide.notes_slide to index supplementary institutional context not visible on the slides.
+  - Granular Slide-Level Chunking:
+      - Segments each slide into an individual ExtractedChunk tagged with page_number=slide_number and slide title headers.
+  - Security Scanning:
+      - Scrubs presenter notes and slide text against secret patterns and credentials using redact_secrets().
 """
 
 import time
@@ -18,15 +28,31 @@ except ImportError:
 
 
 class PresentationProcessor(BaseProcessor):
+    """
+    Document processor specialized for Microsoft PowerPoint (.pptx) presentation decks.
+    """
+
     @property
     def supported_extensions(self) -> List[str]:
+        """List of presentation file extensions supported by this extractor."""
         return ["pptx", "ppt", "odp"]
 
     @property
     def document_type(self) -> DocumentType:
+        """Standard DocumentType classification."""
         return DocumentType.PPTX
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Extracts slide titles, bullet points, and presenter notes from a PowerPoint presentation file.
+
+        Args:
+            filepath: Path to the target presentation file on disk.
+            **kwargs: Extra extraction options.
+
+        Returns:
+            ExtractedDocument: Populated document envelope containing slide-indexed chunks and structured metadata.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
@@ -114,4 +140,3 @@ class PresentationProcessor(BaseProcessor):
             warnings=list(set(warnings)),
             processing_duration_seconds=round(duration, 3)
         )
-
