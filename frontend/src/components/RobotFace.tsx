@@ -1,5 +1,5 @@
 /**
- * BUDDY AI — Robot Face Visual Stage Component
+ * BUDDY AI 2.0 — Robot Face Visual Stage Component
  *
  * Visual & Animation Architecture:
  *   - Twin-Display Synchrony:
@@ -13,6 +13,8 @@
  *       5. Soft Glowing Cheeks: Continuous ambient presence glowing warm cyan/peach.
  *       6. Audio-Reactive Mouth (`RobotMouth` vs `ListeningWaveform`): Dynamically switches
  *          to a real-time audio visualizer during `listening` or expressive speech phonemes during `speaking`.
+ *   - Multimodal State Mapping:
+ *       Synchronizes smoothly across 'idle', 'listening', 'thinking', 'speaking', 'happy', and 'error'.
  */
 
 import React from 'react';
