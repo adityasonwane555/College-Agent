@@ -1,20 +1,48 @@
+/**
+ * BUDDY AI 2.0 — Settings & Hardware Diagnostics Panel
+ *
+ * Architecture & Diagnostics:
+ *   - Multimodal Audio Device Routing:
+ *       - Configures audio input between local browser microphone and remote ESP32 INMP441 I2S microphone.
+ *       - Configures audio output target ('laptop', 'robot', or 'both') with automatic persistence.
+ *   - Real-Time Hardware Testing:
+ *       - Direct controls to ping ESP32-S3, trigger MAX98357A chime tones, test RGB LED animations, and update TFT screen.
+ *   - Service Health & Telemetry Audit:
+ *       - Displays live connectivity to local Ollama LLM, Faster-Whisper GPU models, Fish Audio / Edge-TTS, and SQLite storage.
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { AppConfig, HealthStatus } from '../types';
 import { api } from '../services/api';
 import { X, Cpu, Mic, Volume2, Globe, Server, CheckCircle2, AlertTriangle, RefreshCw, Radio } from 'lucide-react';
 
+/**
+ * Props for the SettingsPanel component.
+ */
 interface SettingsPanelProps {
+  /** Runtime application configuration. */
   config: AppConfig | null;
+  /** Active backend and hardware health telemetry. */
   health: HealthStatus | null;
+  /** Callback to close the settings modal. */
   onClose: () => void;
+  /** List of detected browser audio input devices. */
   audioInputDevices?: MediaDeviceInfo[];
+  /** Identifier of currently selected browser microphone. */
   selectedInputDeviceId?: string;
+  /** Callback when user selects a different input device. */
   onSelectInputDevice?: (deviceId: string) => void;
+  /** Human-readable label of active microphone. */
   activeMicLabel?: string;
+  /** Callback to refresh connected media input devices. */
   onRefreshDevices?: () => void;
+  /** Target device for audio speech playback. */
   audioOutputTarget?: 'robot' | 'laptop' | 'both';
+  /** Callback when user changes audio output target. */
   onSelectOutputTarget?: (target: 'robot' | 'laptop' | 'both') => void;
+  /** Source device for audio capture. */
   audioInputSource?: 'robot' | 'laptop';
+  /** Callback when user toggles microphone source. */
   onSelectInputSource?: (source: 'robot' | 'laptop') => void;
 }
 
