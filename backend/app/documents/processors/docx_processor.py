@@ -1,5 +1,16 @@
 """
-Processor for Microsoft Word (.docx) documents.
+BUDDY AI 2.0 — Microsoft Word (.docx) Document Processor
+
+Architecture & Document Extraction:
+  - Library Integration:
+      - Uses python-docx to parse OpenXML Word processing packages without requiring Microsoft Office installed.
+  - Multi-Element Extraction:
+      - Traverses body paragraphs, discarding empty lines.
+      - Iterates through embedded tables, flattening cell values into pipe-separated (`|`) row representations
+        to preserve relational schema for tabular inquiries (e.g. fee tables, exam schedules).
+  - Security Sanitization:
+      - Masks detected API keys, tokens, and credentials via redact_secrets().
+      - Evaluates document content against adversarial prompt injection attacks via check_prompt_injection().
 """
 
 import time
@@ -18,15 +29,31 @@ except ImportError:
 
 
 class DocxProcessor(BaseProcessor):
+    """
+    Document processor specialized for Microsoft Word (.docx) OpenXML documents.
+    """
+
     @property
     def supported_extensions(self) -> List[str]:
+        """List of lower-case file extensions supported by this extractor."""
         return ["docx"]
 
     @property
     def document_type(self) -> DocumentType:
+        """Standard DocumentType classification."""
         return DocumentType.DOCX
 
     def extract(self, filepath: Path, **kwargs) -> ExtractedDocument:
+        """
+        Extracts paragraphs and linearized tables from a Word document with security scanning.
+
+        Args:
+            filepath: Path to the target DOCX file on disk.
+            **kwargs: Additional runtime extraction options.
+
+        Returns:
+            ExtractedDocument: Populated document envelope containing body paragraphs and table chunks.
+        """
         start_t = time.time()
         file_hash = calculate_file_hash(filepath)
         filename = filepath.name
@@ -91,4 +118,3 @@ class DocxProcessor(BaseProcessor):
             warnings=list(set(warnings)),
             processing_duration_seconds=round(duration, 3)
         )
-
