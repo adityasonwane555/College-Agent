@@ -16,13 +16,16 @@ Architecture & Ingestion Pipeline:
 """
 
 import re
+import logging
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime
 from ..database.repository import repo
 from ..database.models import DocumentMetadataModel
 from .processors.registry import processor_registry
 from .lifecycle import lifecycle_manager
+
+logger = logging.getLogger("buddy.documents.ingestion")
 
 try:
     from pypdf import PdfReader
@@ -170,9 +173,56 @@ def ingest_sample_documents(samples_dir: Path):
         samples_dir: Filesystem directory containing sample documentation.
     """
     if not samples_dir.exists():
+        logger.warning(f"Sample documents directory does not exist: {samples_dir}")
         return
     for file in samples_dir.glob("*.txt"):
         try:
             ingest_text_file(file)
+            logger.info(f"Ingested sample document: {file.name}")
         except Exception as e:
-            print(f"Error ingesting sample doc {file.name}: {e}")
+            logger.error(f"Error ingesting sample doc {file.name}: {e}")
+
+
+def ingest_documents_in_directory(
+    dir_path: Path,
+    extensions: Optional[List[str]] = None,
+    auto_approve: bool = True
+) -> Dict[str, Any]:
+    """
+    Scans a directory for documents matching specified extensions and ingests them.
+
+    Args:
+        dir_path: Target directory containing documents.
+        extensions: Optional list of file extensions to ingest (e.g. ['.txt', '.pdf', '.docx']).
+        auto_approve: Whether to automatically approve documents for search indexing.
+
+    Returns:
+        Dict[str, Any]: Summary dictionary with counts of processed, succeeded, and failed files.
+    """
+    if not dir_path.exists():
+        return {"processed": 0, "succeeded": 0, "failed": 0, "errors": [f"Directory not found: {dir_path}"]}
+
+    allowed = set(ext.lower() for ext in extensions) if extensions else {".txt", ".pdf", ".docx", ".md", ".csv"}
+    succeeded = 0
+    failed = 0
+    errors = []
+
+    for file in dir_path.iterdir():
+        if file.is_file() and file.suffix.lower() in allowed:
+            try:
+                res = ingest_universal_file(file, auto_approve=auto_approve)
+                if res.get("status") in ("approved", "pending"):
+                    succeeded += 1
+                else:
+                    failed += 1
+                    errors.append(f"{file.name}: {res.get('message', 'Unknown status')}")
+            except Exception as e:
+                failed += 1
+                errors.append(f"{file.name}: {str(e)}")
+
+    return {
+        "processed": succeeded + failed,
+        "succeeded": succeeded,
+        "failed": failed,
+        "errors": errors
+    }
