@@ -1,4 +1,4 @@
- """
+"""
 BUDDY AI — SQLite Database Repository & Institutional Data Store
 
 Architecture & Persistence Subsystem:
@@ -802,6 +802,29 @@ class DatabaseRepository:
                 JOIN document_chunks dc ON cv.chunk_id = dc.id
             """)
             return [dict(row) for row in cursor.fetchall()]
+
+
+    def get_database_stats(self) -> Dict[str, int]:
+        """
+        Calculates aggregate record counts across all core institutional tables in the repository.
+
+        Returns:
+            Dict[str, int]: Table names mapped to their current row count.
+        """
+        tables = [
+            "faqs", "departments", "rooms", "faculty", "college_hours",
+            "events", "announcements", "documents", "document_chunks", "chunk_vectors"
+        ]
+        stats = {}
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for tbl in tables:
+                try:
+                    cursor.execute(f"SELECT COUNT(*) FROM {tbl}")
+                    stats[tbl] = cursor.fetchone()[0]
+                except Exception:
+                    stats[tbl] = 0
+        return stats
 
 
 repo = DatabaseRepository()
