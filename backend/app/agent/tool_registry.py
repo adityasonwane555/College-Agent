@@ -23,7 +23,7 @@ Architecture & Tool Execution:
 """
 
 import inspect
-from typing import Dict, Any, Callable, List
+from typing import Dict, Any, Callable, List, Optional, Tuple
 from ..tools import college_tools
 from ..tools import web_tools
 
@@ -207,3 +207,51 @@ async def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Any:
         return result
     except Exception as e:
         return f"Error executing tool '{tool_name}': {str(e)}"
+
+
+def get_available_tools() -> List[str]:
+    """
+    Returns a sorted list of all registered tool function names.
+
+    Returns:
+        List[str]: Identifier strings for registered tool handlers.
+    """
+    return sorted(list(TOOL_FUNCTIONS.keys()))
+
+
+def get_tool_schema(tool_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves the function calling JSON schema definition for a specific tool.
+
+    Args:
+        tool_name: Registered identifier of the tool.
+
+    Returns:
+        Optional[Dict[str, Any]]: Tool schema dictionary, or None if not registered.
+    """
+    for entry in OLLAMA_TOOLS_SCHEMA:
+        if entry.get("function", {}).get("name") == tool_name:
+            return entry
+    return None
+
+
+def validate_tool_arguments(tool_name: str, arguments: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+    Validates provided arguments against required parameters in the tool schema.
+
+    Args:
+        tool_name: Registered identifier of the tool.
+        arguments: Key-value parameters supplied for invocation.
+
+    Returns:
+        Tuple[bool, Optional[str]]: (True, None) if arguments satisfy schema, or (False, error_reason).
+    """
+    schema = get_tool_schema(tool_name)
+    if not schema:
+        return False, f"Tool '{tool_name}' is not registered."
+
+    required = schema.get("function", {}).get("parameters", {}).get("required", [])
+    for param in required:
+        if param not in arguments or arguments[param] is None:
+            return False, f"Missing required parameter '{param}' for tool '{tool_name}'."
+    return True, None
