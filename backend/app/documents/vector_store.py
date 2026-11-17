@@ -18,6 +18,7 @@ Architecture & Vector Engine:
 import math
 import json
 import logging
+import zlib
 from typing import List, Dict, Any, Optional
 import numpy as np
 
@@ -61,22 +62,35 @@ class LocalMultilingualVectorizer:
         clean = text.lower().strip()
         tokens = clean.split()
 
-        # Word-level hashing
+        # Word-level deterministic hashing
         for token in tokens:
-            h = hash(token) % self.dimensions
-            vec[h] += 1.0
+            h = zlib.crc32(token.encode("utf-8")) % self.dimensions
+            vec[h] += 1.5
 
-        # Subword 3-gram and 4-gram hashing for robust multilingual semantic capture
-        for i in range(len(clean) - 2):
-            trigram = clean[i:i+3]
-            h = (hash(trigram) * 31) % self.dimensions
-            vec[h] += 0.5
+        # Subword 3-gram and 4-gram deterministic hashing for robust multilingual semantic capture
+        for n in (3, 4):
+            for i in range(len(clean) - n + 1):
+                ngram = clean[i:i + n]
+                h = zlib.crc32(ngram.encode("utf-8")) % self.dimensions
+                vec[h] += 0.5
 
         # L2 Normalization
         norm = np.linalg.norm(vec)
         if norm > 1e-6:
             vec = vec / norm
         return vec.tolist()
+
+    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generates dense vector embeddings for multiple text passages in a batch.
+
+        Args:
+            texts: List of text passages to embed.
+
+        Returns:
+            List[List[float]]: List of L2-normalized dense embedding vectors.
+        """
+        return [self.embed_text(t) for t in texts]
 
 
 class LocalVectorStore:
@@ -200,6 +214,21 @@ class LocalVectorStore:
 
         scored.sort(key=lambda x: x["similarity_score"], reverse=True)
         return scored[:top_k]
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Retrieves operational statistics about the vector store.
+
+        Returns:
+            Dict[str, Any]: Metadata containing vector dimensions, indexed chunk count, and model name.
+        """
+        all_vectors = repo.get_all_chunk_vectors()
+        return {
+            "dimensions": self.vectorizer.dimensions,
+            "total_vectors": len(all_vectors),
+            "model_name": "local_multilingual_vectorizer",
+            "recent_errors": len(self.indexing_errors)
+        }
 
 
 vector_store = LocalVectorStore()
