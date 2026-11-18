@@ -483,4 +483,48 @@ def resolve_fast_path(user_query: str) -> Optional[Dict[str, Any]]:
             "citations": [CitationModel(source="APCOER Campus Guide", page=1, section="Location & Connectivity", snippet="S. No. 83/2/E, Laxminagar, Parvati, Pune - 411009")]
         }
 
+    # 10. Canteen, Cafeteria & Food Court
+    if any(k in clean for k in ["canteen", "cafeteria", "mess", "food", "lunch", "snacks", "tea", "coffee"]):
+        return {
+            "response": (
+                "The APCOER Campus Canteen and Food Court is located adjacent to the Student Recreation Wing on the Ground Floor. "
+                "It serves fresh vegetarian breakfast, wholesome thali lunches, beverages, and snacks from 8:00 AM to 6:00 PM on all instructional days. "
+                "Would you like directions to the food court?"
+            ),
+            "citations": [CitationModel(source="APCOER Campus Facilities", page=1, section="Canteen & Amenities", snippet="Campus Food Court: Ground Floor, Recreation Wing (8:00 AM - 6:00 PM)")]
+        }
+
+    # 11. Library Card, Borrowing & Book Bank
+    if any(k in clean for k in ["library card", "borrow book", "book bank", "issue book", "library membership"]):
+        return {
+            "response": (
+                "Students can obtain their Central Library Membership Card at the Circulation Counter on the Ground Floor of the Library. "
+                "Undergraduate students are eligible to issue 3 technical books for 14 days, with full access to our Book Bank scheme and DelNet digital journal terminals. "
+                "Please present your college ID card at the desk to activate your account!"
+            ),
+            "citations": [CitationModel(source="APCOER Library Regulations", page=1, section="Circulation & Book Bank", snippet="3 Books for 14 days | Book Bank Scheme & DelNet access with College ID")]
+        }
+
     return None
+
+
+def list_fast_path_intents() -> List[str]:
+    """
+    Returns the comprehensive list of institutional inquiry domains handled by the fast-path engine.
+
+    Returns:
+        List[str]: Canonical domain categories resolved deterministically in <10ms.
+    """
+    return [
+        "College Identity & Heritage",
+        "Leadership & Administration",
+        "Training & Placements",
+        "Admissions & DTE Code 6794",
+        "College Hours & Timings",
+        "Campus Navigation & Rooms",
+        "Engineering Branches & Degrees",
+        "Fees, Concessions & Scholarships",
+        "Campus Address & Transit Directions",
+        "Canteen & Student Amenities",
+        "Library Membership & Book Bank"
+    ]
