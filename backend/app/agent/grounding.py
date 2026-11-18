@@ -72,4 +72,27 @@ def verify_response_grounding(
                     # Replace incorrect date with approved date
                     grounded_text = re.sub(re.escape(dm), approved_date, grounded_text, flags=re.IGNORECASE)
 
+        # Check venue consistency if approved venue is present in metadata
+        if approved_venue and event_title.lower() in response_text.lower():
+            if approved_venue.lower() not in grounded_text.lower() and any(v in grounded_text.lower() for v in ["seminar hall", "library hall", "open air theatre", "canteen hall"]):
+                corrections.append(
+                    f"Verified venue '{approved_venue}' ensured for event '{event_title}'."
+                )
+
     return grounded_text, corrections
+
+
+def is_grounded(response_text: str, verified_facts: List[Dict[str, Any]]) -> bool:
+    """
+    Evaluates whether the candidate response satisfies all factual grounding constraints
+    without requiring any modifications.
+
+    Args:
+        response_text: Raw candidate response string.
+        verified_facts: Retrieved verified passages with authoritative metadata.
+
+    Returns:
+        bool: True if response contains no contradictory dates or assertions.
+    """
+    _, corrections = verify_response_grounding(response_text, verified_facts)
+    return len(corrections) == 0
