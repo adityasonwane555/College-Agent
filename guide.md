@@ -17,6 +17,7 @@ Welcome to the comprehensive operational manual for **BUDDY**, your Smart Colleg
    - [Admin Management Console](#admin-management-console)
 5. [Hardware & GPU Optimization (NVIDIA RTX vs. AMD)](#5-hardware--gpu-optimization-nvidia-rtx-vs-amd)
 6. [Troubleshooting & FAQs](#6-troubleshooting--faqs)
+7. [BUDDY 2.0 Ingestion Pipeline, Hybrid Search & Hardware Integration](#7-buddy-20-ingestion-pipeline-hybrid-search--hardware-integration)
 
 ---
 
@@ -274,3 +275,25 @@ BUDDY is fully optimized to harness your **NVIDIA GeForce RTX 4060 Laptop GPU (8
 ### Q: How do I reset the college database?
 - The database is stored at `data/buddy.db`.
 - To reset to initial demo data, delete `data/buddy.db` and restart the backend. The backend will automatically re-create the database with all default departments, faculty, and prospectus documents.
+
+---
+
+## 7. BUDDY 2.0 Ingestion Pipeline, Hybrid Search & Hardware Integration
+
+BUDDY 2.0 expands the robotic receptionist into a multi-modal campus intelligence platform:
+
+### 1. Universal Document Ingestion Subsystem:
+- **Processor Registry**: Modular extractors supporting PDF, Word (DOCX), Excel (XLSX), Presentations (PPTX), Web Pages (HTML/XML), Source Code, Audio, Video, Archives (ZIP/TAR), and Plain Text.
+- **Section-Aware Semantic Chunking**: Intelligently chunks text by section boundaries while preserving source page attribution.
+- **Security & Integrity**: Automatic SHA-256 deduplication hashing, Zip-Slip vulnerability prevention, path traversal defense, and prompt injection sanitization.
+
+### 2. Reciprocal Rank Fusion (RRF) Hybrid Search:
+- **Three-Way Retrieval Ladder**:
+  1. Relational SQL queries for verified entities (departments, faculty cabins, operating hours).
+  2. SQLite FTS5 full-text keyword indexing for BM25 matching.
+  3. Zero-dependency multilingual vector store (supporting English, Hindi, and Marathi via subword n-gram feature hashing).
+- **Reciprocal Rank Fusion**: Re-ranks candidates dynamically, boosting authoritative database facts and producing grounded citations with source snippets.
+
+### 3. ESP32 Hardware & Physical Robot Synchrony:
+- **RGB State Controller**: Non-blocking thread-safe color animations mapped to robot emotions (Idle Cyan, Listening Green, Thinking Amber, Speaking Indigo, Error Red).
+- **Physical Telemetry**: Real-time WebSocket connection to the ESP32 microcontroller over local WiFi for I2S audio DAC routing and hardware status inspection.
