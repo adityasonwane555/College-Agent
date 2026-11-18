@@ -125,6 +125,42 @@ class SessionManager:
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
 
+    def has_session(self, session_id: str) -> bool:
+        """
+        Checks whether an active session buffer exists for the given ID.
+
+        Args:
+            session_id: Unique string session token.
+
+        Returns:
+            bool: True if session exists in memory.
+        """
+        return session_id in self.sessions
+
+    def clear_session(self, session_id: str) -> bool:
+        """
+        Removes a session buffer completely from memory.
+
+        Args:
+            session_id: Unique string session token.
+
+        Returns:
+            bool: True if session was removed, False if not present.
+        """
+        if session_id in self.sessions:
+            del self.sessions[session_id]
+            return True
+        return False
+
+    def get_active_session_count(self) -> int:
+        """
+        Returns the count of active conversational sessions currently in memory.
+
+        Returns:
+            int: Number of tracked sessions.
+        """
+        return len(self.sessions)
+
 
 session_manager = SessionManager(max_history=settings.SESSION_MAX_HISTORY)
 
@@ -134,6 +170,20 @@ class AgentOrchestrator:
     Master reasoning agent that orchestrates multi-turn LLM reasoning,
     hybrid retrieval routing, tool execution, and citation grounding.
     """
+
+    def get_status(self) -> Dict[str, Any]:
+        """
+        Returns runtime operational telemetry for the orchestrator.
+
+        Returns:
+            Dict[str, Any]: Session counts, history capacity, and provider fallback status.
+        """
+        return {
+            "active_sessions": session_manager.get_active_session_count(),
+            "max_history_per_session": session_manager.max_history,
+            "mock_ai_fallback_enabled": settings.MOCK_AI_FALLBACK,
+            "web_search_enabled": settings.WEB_SEARCH_ENABLED
+        }
 
     async def run(
         self,
