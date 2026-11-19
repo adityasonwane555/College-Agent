@@ -80,6 +80,34 @@ class ESP32Client:
         self.is_connected = False
         return {"status": "offline", "error": f"Cannot reach ESP32 at {self.base_url}"}
 
+    def ping(self) -> bool:
+        """
+        Executes a rapid low-overhead ping to verify whether the ESP32 is responding on Wi-Fi.
+
+        Returns:
+            bool: True if ESP32 responds within 1.0 second.
+        """
+        try:
+            with httpx.Client(timeout=1.0) as client:
+                r = client.get(f"{self.base_url}/health")
+                return r.status_code == 200
+        except Exception:
+            return False
+
+    def get_connection_status(self) -> Dict[str, Any]:
+        """
+        Returns cached telemetry about the connection status with the ESP32-S3.
+
+        Returns:
+            Dict[str, Any]: Status map containing connection state, base URL, and streaming status.
+        """
+        return {
+            "is_connected": self.is_connected,
+            "base_url": self.base_url,
+            "last_contact_seconds_ago": round(time.time() - self.last_contact, 1) if self.last_contact > 0 else None,
+            "is_streaming": self._active_stream_client is not None
+        }
+
     def discover_esp32(self) -> Optional[Dict[str, Any]]:
         """
         Locates the ESP32-S3 via mDNS (buddy.local) or local subnet ARP table candidates.
