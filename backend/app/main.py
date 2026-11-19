@@ -85,6 +85,10 @@ class ConnectionManager:
         for dead in dead_connections:
             self.active_connections.discard(dead)
 
+    def get_active_client_count(self) -> int:
+        """Returns the number of currently connected WebSocket clients."""
+        return len(self.active_connections)
+
 
 ws_manager = ConnectionManager()
 
@@ -137,6 +141,21 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.get("/")
+def get_root_info():
+    """
+    Root informational endpoint providing API metadata, documentation URL,
+    and active WebSocket subscriber count.
+    """
+    return {
+        "system": "BUDDY AI",
+        "description": "Smart College Reception AI Robot Backend",
+        "version": "2.0.0",
+        "docs_url": "/docs",
+        "active_telemetry_subscribers": ws_manager.get_active_client_count()
+    }
 
 
 # WebSocket status endpoint
