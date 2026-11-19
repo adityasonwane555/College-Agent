@@ -564,3 +564,22 @@ def stop_hardware_voice(target_state: str = "IDLE", reset_state: Any = True):
     rgb_controller.set_state(target)
     esp_res = esp32_client.stop_speaker(target_state=target)
     return {"ok": True, "state": target, "esp32_stopped": esp_res}
+
+
+@router.get("/hardware/led-states")
+def get_hardware_led_states():
+    """Returns the list of valid RGB visual state identifiers."""
+    return {"states": rgb_controller.get_valid_states()}
+
+
+@router.get("/system/stats")
+def get_system_runtime_stats():
+    """
+    Returns aggregated runtime statistics across the relational database,
+    dense vector store, and conversational session manager.
+    """
+    return {
+        "database": repo.get_database_stats(),
+        "vector_store": vector_store.get_stats(),
+        "orchestrator": orchestrator.get_status()
+    }
