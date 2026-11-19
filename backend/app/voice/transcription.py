@@ -21,9 +21,12 @@ Architecture & Audio Pipeline:
 
 import os
 import sys
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 from ..config import settings
+
+logger = logging.getLogger("buddy.voice.transcription")
 
 # 1. Patch PyAV for newer versions where metadata_errors was removed from av.open
 try:
@@ -246,3 +249,26 @@ def transcribe_audio_file(file_path: Path) -> Dict[str, Any]:
             "text": "",
             "error": f"Transcription error: {str(primary_err)}"
         }
+
+
+def get_stt_status() -> Dict[str, Any]:
+    """
+    Returns telemetry for the local speech-to-text subsystem.
+
+    Returns:
+        Dict[str, Any]: Model name, device configuration, CUDA availability, and load status.
+    """
+    return {
+        "installed": is_whisper_installed(),
+        "model_name": settings.STT_MODEL,
+        "configured_device": settings.STT_DEVICE,
+        "cuda_ready": is_cuda_supported_and_loaded(),
+        "language": settings.STT_LANGUAGE,
+        "is_loaded": _whisper_model is not None and _whisper_model is not False
+    }
+
+
+def reset_stt_cache():
+    """Clears cached Whisper model instance to allow re-initialization with new parameters."""
+    global _whisper_model
+    _whisper_model = None
