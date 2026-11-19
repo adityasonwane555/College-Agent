@@ -28,6 +28,7 @@ import uuid
 import time
 import httpx
 import subprocess
+import logging
 import array
 import struct
 import asyncio
@@ -37,6 +38,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from ..config import settings, WORKSPACE_DIR
 from .audio_utils import AUDIO_DIR
+
+logger = logging.getLogger("buddy.voice.synthesis")
 
 # Keep track of internal server process if launched by backend
 _internal_s2_process: Optional[subprocess.Popen] = None
@@ -459,3 +462,55 @@ def synthesize_speech(text: str) -> Dict[str, Any]:
         "text": clean_text,
         "message": "Fish Audio S2 Pro model offline. Web Speech API fallback active."
     }
+
+
+def get_tts_engine_status() -> Dict[str, Any]:
+    """
+    Evaluates availability across all supported neural text-to-speech engines.
+
+    Returns:
+        Dict[str, Any]: Status map for fish_audio_server, fish_audio_api, edge_tts, and local_cli.
+    """
+    server_alive = is_fish_tts_server_alive()
+    s2_bin = WORKSPACE_DIR / "BUDDY-Fish-TTS" / "s2.cpp" / "build" / "Release" / "s2.exe"
+    has_api_key = bool(getattr(settings, "FISH_AUDIO_API_KEY", ""))
+
+    return {
+        "tts_enabled": settings.TTS_ENABLED,
+        "primary_server_url": settings.FISH_TTS_SERVER_URL,
+        "server_alive": server_alive,
+        "cloud_api_configured": has_api_key,
+        "local_cli_binary_exists": s2_bin.exists(),
+        "edge_tts_available": True
+    }
+
+
+def cleanup_old_audio_files(max_age_seconds: int = 3600) -> int:
+    """
+    Purges temporary synthesized audio files older than max_age_seconds from AUDIO_DIR.
+
+    Args:
+        max_age_seconds: Threshold age in seconds for deletion (default: 3600).
+
+    Returns:
+        int: Number of deleted files.
+    """
+    if not AUDIO_DIR.exists():
+        return 0
+    now = time.time()
+    deleted = 0
+    for file in AUDIO_DIR.glob("*.wav"):
+        try:
+            if now - file.stat().st_mtime > max_age_seconds:
+                file.unlink()
+                deleted += 1
+        except Exception:
+            pass
+    for file in AUDIO_DIR.glob("*.mp3"):
+        try:
+            if now - file.stat().st_mtime > max_age_seconds:
+                file.unlink()
+                deleted += 1
+        except Exception:
+            pass
+    return deleted
