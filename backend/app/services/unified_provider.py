@@ -89,6 +89,46 @@ class UnifiedProviderManager:
         """
         return time.time() < self.circuit_breakers.get(provider, 0.0)
 
+    def reset_breaker(self, provider: str):
+        """
+        Resets the circuit breaker cooldown for a provider, allowing immediate retries.
+
+        Args:
+            provider: Identifier of the provider ("gemini", "groq", "ollama").
+        """
+        self.circuit_breakers[provider] = 0.0
+
+    async def get_preferred_provider(self) -> str:
+        """
+        Determines the highest-priority operational provider according to the failover ladder.
+
+        Returns:
+            str: Identifier of the preferred provider ("groq", "gemini", "ollama", or "mock").
+        """
+        health = await self.get_all_health()
+        if not self.is_breaker_open("groq") and health.get("groq", {}).is_available:
+            return "groq"
+        if not self.is_breaker_open("gemini") and health.get("gemini", {}).is_available:
+            return "gemini"
+        if not self.is_breaker_open("ollama") and health.get("ollama", {}).is_available:
+            return "ollama"
+        return "mock"
+
+    async def get_summary(self) -> Dict[str, Any]:
+        """
+        Returns a concise operational telemetry summary of all providers.
+
+        Returns:
+            Dict[str, Any]: Status summary including preferred provider and breaker cooldowns.
+        """
+        health = await self.get_all_health()
+        preferred = await self.get_preferred_provider()
+        return {
+            "preferred_provider": preferred,
+            "providers": {k: v.dict() for k, v in health.items()},
+            "breakers": {k: round(max(0.0, v - time.time()), 1) for k, v in self.circuit_breakers.items()}
+        }
+
     async def get_all_health(self) -> Dict[str, ProviderHealth]:
         """
         Audits live connectivity and circuit breaker status across all configured providers.
