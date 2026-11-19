@@ -328,6 +328,35 @@ class RGBController:
             self.is_connected = False
             return {"ok": False, "message": f"Cannot reach ESP32 at {self.base_url}: {e}"}
 
+    def get_valid_states(self) -> list:
+        """Returns a sorted list of all valid LED visual states."""
+        return sorted(list(VALID_STATES))
+
+    def is_valid_state(self, state: str) -> bool:
+        """
+        Validates whether a candidate state string maps to a valid hardware state.
+
+        Args:
+            state: Candidate state name string.
+
+        Returns:
+            bool: True if state is recognized.
+        """
+        return state.strip().upper() in VALID_STATES
+
+    def test_pattern(self) -> Dict[str, Any]:
+        """
+        Executes a rapid sequential pattern across Idle, Listening, Thinking, and Speaking.
+        Useful for factory diagnostics and physical LED ring validation.
+
+        Returns:
+            Dict[str, Any]: Test pattern dispatch status.
+        """
+        for s in ["IDLE", "LISTENING", "THINKING", "SPEAKING", "IDLE"]:
+            self.set_state(s)
+            time.sleep(0.05)
+        return {"ok": True, "tested_states": ["IDLE", "LISTENING", "THINKING", "SPEAKING", "IDLE"]}
+
     def close(self):
         """Gracefully shuts down the background worker thread."""
         self._stop_event.set()
@@ -354,3 +383,8 @@ async def set_led_state_async(state: str, amplitude: float = 0.0) -> bool:
 def get_led_status() -> Dict[str, Any]:
     """Convenience helper to retrieve telemetry from the global rgb_controller singleton."""
     return rgb_controller.get_status()
+
+
+def get_valid_led_states() -> list:
+    """Convenience helper to get valid LED states from the global rgb_controller singleton."""
+    return rgb_controller.get_valid_states()
