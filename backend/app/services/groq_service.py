@@ -53,6 +53,38 @@ def reset_groq_quota():
     _groq_rate_limited_until = 0.0
 
 
+def set_rate_limit_cooldown(seconds: float = 20.0) -> None:
+    """
+    Engages a rate-limit cooldown window for the Groq Cloud API.
+
+    Args:
+        seconds: Duration of cooldown in seconds (default: 20.0).
+    """
+    global _groq_rate_limited_until
+    _groq_rate_limited_until = time.time() + seconds
+
+
+def get_groq_status() -> Dict[str, Any]:
+    """
+    Returns operational telemetry for the Groq Cloud service.
+
+    Returns:
+        Dict[str, Any]: Availability, key status, and cooldown metrics.
+    """
+    global _groq_rate_limited_until
+    now = time.time()
+    remaining = max(0.0, round(_groq_rate_limited_until - now, 1))
+    has_key = bool(settings.GROQ_API_KEY and len(settings.GROQ_API_KEY.strip()) > 10)
+
+    return {
+        "enabled": settings.GROQ_ENABLED,
+        "api_key_configured": has_key,
+        "is_available": is_groq_available(),
+        "cooldown_seconds_remaining": remaining,
+        "primary_model": "gpt-oss-120b"
+    }
+
+
 def _clean_reasoning_tags(text: str) -> str:
     """
     Strips internal `<think>...</think>` reasoning trace blocks from final model output.
