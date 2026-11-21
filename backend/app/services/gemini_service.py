@@ -54,6 +54,38 @@ def reset_gemini_quota():
     _gemini_rate_limited_until = 0.0
 
 
+def set_rate_limit_cooldown(seconds: float = 30.0) -> None:
+    """
+    Engages a rate-limit cooldown window for Google Gemini.
+
+    Args:
+        seconds: Duration of the cooldown in seconds (default: 30.0).
+    """
+    global _gemini_rate_limited_until
+    _gemini_rate_limited_until = time.time() + seconds
+
+
+def get_gemini_status() -> Dict[str, Any]:
+    """
+    Returns operational telemetry for the Google Gemini cloud service.
+
+    Returns:
+        Dict[str, Any]: Configuration, key status, and circuit breaker cooldown metrics.
+    """
+    global _gemini_rate_limited_until
+    now = time.time()
+    remaining = max(0.0, round(_gemini_rate_limited_until - now, 1))
+    has_key = bool(settings.GEMINI_API_KEY and len(settings.GEMINI_API_KEY.strip()) > 10)
+
+    return {
+        "enabled": settings.GEMINI_ENABLED,
+        "api_key_configured": has_key,
+        "is_available": is_gemini_available(),
+        "cooldown_seconds_remaining": remaining,
+        "preferred_model": "gemini-3.5-flash-lite"
+    }
+
+
 def _clean_reasoning_tags(text: str) -> str:
     """
     Strips internal `<think>...</think>` reasoning trace blocks from final model output.
