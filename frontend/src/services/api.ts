@@ -372,5 +372,41 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to fetch diagnostics');
     return res.json();
+  },
+
+  /**
+   * Fetches aggregated system runtime statistics across database, vector store, and orchestrator.
+   */
+  async getSystemStats() {
+    const res = await fetch(`${API_BASE}/system/stats`);
+    if (!res.ok) throw new Error('Failed to fetch system stats');
+    return res.json();
+  },
+
+  /**
+   * Retrieves recognized RGB visual state identifiers from the backend controller.
+   */
+  async getLedStates(): Promise<{ states: string[] }> {
+    const res = await fetch(`${API_BASE}/hardware/led-states`);
+    if (!res.ok) throw new Error('Failed to fetch LED states');
+    return res.json();
+  },
+
+  /**
+   * Pings the ESP32-S3 microcontroller to verify Wi-Fi reachability.
+   */
+  async pingHardwareLed() {
+    const res = await fetch(`${API_BASE}/hardware/led-ping`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to ping hardware LED');
+    return res.json();
+  },
+
+  /**
+   * Queries the ESP32 hardware health status over local network.
+   */
+  async getEsp32Health() {
+    const res = await fetch(`${API_BASE}/hardware/esp32-health`);
+    if (!res.ok) throw new Error('Failed to fetch ESP32 health');
+    return res.json();
   }
 };
