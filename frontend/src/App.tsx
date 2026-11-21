@@ -39,7 +39,9 @@ const SUGGESTIONS = [
   "Who is the Principal and where is his office?",
   "Tell me about B.Tech admissions under DTE Code 6794.",
   "Which engineering branches are offered at APCOER?",
-  "What companies visit for campus placements?"
+  "What companies visit for campus placements?",
+  "What are the Central Library timings?",
+  "Where is the campus canteen and cafeteria?"
 ];
 
 /**
@@ -367,6 +369,7 @@ export const App: React.FC = () => {
                 transition: 'all 0.2s ease'
               }}
               className="glow-border"
+              aria-label={`Ask suggestion: ${chip}`}
             >
               {chip}
             </button>
