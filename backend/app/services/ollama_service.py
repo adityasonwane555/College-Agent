@@ -17,10 +17,13 @@ Architecture & Inference Pipeline:
 
 import re
 import json
+import time
 import httpx
+import logging
 from typing import Dict, Any, List, Optional
 from ..config import settings
-import time
+
+logger = logging.getLogger("buddy.services.ollama")
 
 _ollama_cache: Dict[str, Any] = {
     "is_alive": False,
@@ -83,6 +86,31 @@ async def check_ollama_status() -> Dict[str, Any]:
             "model_available": False,
             "message": f"Ollama is not running at {settings.OLLAMA_BASE_URL} ({str(e)})"
         }
+
+
+def clear_ollama_cache() -> None:
+    """Clears the cached liveness flag to force an immediate network probe."""
+    _ollama_cache["last_checked"] = 0.0
+    _ollama_cache["is_alive"] = False
+
+
+async def get_loaded_model_info() -> Dict[str, Any]:
+    """
+    Probes the Ollama /api/ps endpoint to identify models currently loaded in GPU VRAM.
+
+    Returns:
+        Dict[str, Any]: Loaded models list and VRAM utilization details.
+    """
+    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/ps".replace("localhost", "127.0.0.1")
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                return {"success": True, "models": data.get("models", [])}
+            return {"success": False, "models": [], "status_code": resp.status_code}
+    except Exception as e:
+        return {"success": False, "models": [], "error": str(e)}
 
 
 def _word_in_text(word: str, text: str) -> bool:
