@@ -68,3 +68,30 @@ INSTITUTIONAL KNOWLEDGE BASE (APCOER Pune - Use when relevant to the user's inqu
 - Campus Highlights: Central Library & Digital Reading Hall (Ground & 1st Floor), APCOER TBI (Technology Business Incubator), Advanced CAD/CAM & Robotics Labs, Auditorium, Gymkhana, and Sports Ground.
 - Major Events: SPARKTECH (Annual National Technical Symposium), Technothon (Hackathon & Innovation Challenge), and Ashwamedh (Sports & Cultural Fest).
 """
+
+
+def get_system_prompt() -> str:
+    """Returns the primary system prompt for conversational agent orchestration."""
+    return SYSTEM_PROMPT
+
+
+def get_seed_facts_summary() -> dict:
+    """Returns structured metadata of institutional seed facts for runtime verification."""
+    return {
+        "institution": "Anantrao Pawar College of Engineering & Research (APCOER)",
+        "city": "Pune",
+        "dte_code": 6794,
+        "trust": "Akhil Bharatiya Maratha Shikshan Parishad (ABMSP)",
+        "principal": "Dr. Sunil B. Thakare",
+        "vice_principal": "Prof. Shrikant B. Jagtap",
+        "departments": [
+            "Computer Engineering",
+            "Information Technology",
+            "Artificial Intelligence & Data Science",
+            "Electronics & Telecommunication",
+            "Civil Engineering",
+            "Mechanical Engineering",
+            "Master of Computer Applications"
+        ],
+        "tpo_head": "Prof. Nilesh S. Totla"
+    }
