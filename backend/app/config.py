@@ -123,6 +123,40 @@ class Settings(BaseSettings):
     ESP32_LED_TIMEOUT_SECONDS: float = 1.0
     ESP32_LED_TOKEN: str = ""
 
+    def get_active_ai_provider(self) -> str:
+        """Determines the primary AI inference provider configured."""
+        if self.GROQ_ENABLED and self.GROQ_API_KEY:
+            return "groq"
+        if self.GEMINI_ENABLED and self.GEMINI_API_KEY:
+            return "gemini"
+        return "ollama"
+
+    def is_cloud_available(self) -> bool:
+        """Returns True if at least one cloud LLM API key is configured."""
+        return bool(
+            (self.GROQ_ENABLED and self.GROQ_API_KEY and len(self.GROQ_API_KEY) > 10) or
+            (self.GEMINI_ENABLED and self.GEMINI_API_KEY and len(self.GEMINI_API_KEY) > 10)
+        )
+
+    def get_safe_summary(self) -> dict:
+        """Returns runtime settings with credentials safely masked."""
+        return {
+            "ollama_model": self.OLLAMA_MODEL,
+            "ollama_base_url": self.OLLAMA_BASE_URL,
+            "gemini_enabled": self.GEMINI_ENABLED,
+            "gemini_model": self.GEMINI_MODEL,
+            "gemini_key_set": bool(self.GEMINI_API_KEY),
+            "groq_enabled": self.GROQ_ENABLED,
+            "groq_model": self.GROQ_MODEL,
+            "groq_key_set": bool(self.GROQ_API_KEY),
+            "mock_fallback": self.MOCK_AI_FALLBACK,
+            "stt_model": self.STT_MODEL,
+            "stt_device": self.STT_DEVICE,
+            "tts_engine": self.TTS_ENGINE,
+            "esp32_led_enabled": self.ESP32_LED_ENABLED,
+            "active_provider": self.get_active_ai_provider()
+        }
+
     model_config = SettingsConfigDict(
         env_file=str(WORKSPACE_DIR / ".env"),
         env_file_encoding="utf-8",
