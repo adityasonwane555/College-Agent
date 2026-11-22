@@ -326,3 +326,30 @@ def build_citations(retrieval_results: List[Dict[str, Any]]) -> List[CitationMod
         ))
     return citations
 
+
+def get_retrieval_stats(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Computes statistical telemetry across ranked hybrid search results.
+
+    Args:
+        results: List of candidate passages returned by hybrid_search.
+
+    Returns:
+        Dict[str, Any]: Total candidates, average fusion score, and method breakdown.
+    """
+    if not results:
+        return {"total": 0, "methods": {}, "avg_fusion_score": 0.0}
+
+    methods: Dict[str, int] = {}
+    total_score = 0.0
+    for r in results:
+        m = r.get("retrieval_method", "unknown")
+        methods[m] = methods.get(m, 0) + 1
+        total_score += r.get("fusion_score", 0.0)
+
+    return {
+        "total": len(results),
+        "methods": methods,
+        "avg_fusion_score": round(total_score / len(results), 4)
+    }
+
