@@ -166,3 +166,31 @@ def check_prompt_injection(text: str) -> Tuple[bool, Optional[str]]:
             return True, f"Suspicious prompt-override instruction detected: '{match.group(0)}'"
     return False, None
 
+
+def is_allowed_extension(filename: str, allowed_extensions: List[str]) -> bool:
+    """
+    Checks whether a filename matches one of the allowed file extensions.
+
+    Args:
+        filename: Target filename string.
+        allowed_extensions: List of allowed suffixes (e.g. ['.pdf', '.txt']).
+
+    Returns:
+        bool: True if extension is permitted.
+    """
+    clean = filename.lower().strip()
+    return any(clean.endswith(ext.lower()) for ext in allowed_extensions)
+
+
+def get_clean_basename(filename: str) -> str:
+    """
+    Extracts a sanitized filename basename stripped of any path traversal sequences.
+
+    Args:
+        filename: Raw input filename.
+
+    Returns:
+        str: Clean basename safe for filesystem operations.
+    """
+    return sanitize_filename(filename)
+
