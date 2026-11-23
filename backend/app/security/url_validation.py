@@ -77,3 +77,36 @@ def is_safe_url(url: str) -> Tuple[bool, str]:
         return True, "URL is safe."
     except Exception as e:
         return False, f"URL validation error: {str(e)}"
+
+
+def is_https_url(url: str) -> bool:
+    """
+    Checks whether a URL uses secure HTTPS protocol.
+
+    Args:
+        url: Web URL string.
+
+    Returns:
+        bool: True if scheme is https.
+    """
+    try:
+        return urlparse(url).scheme.lower() == "https"
+    except Exception:
+        return False
+
+
+def sanitize_url_for_display(url: str) -> str:
+    """
+    Strips query parameters containing sensitive tokens or sessions from URLs for safe chat display.
+
+    Args:
+        url: Raw URL string.
+
+    Returns:
+        str: Cleaned URL showing scheme, host, and path.
+    """
+    try:
+        p = urlparse(url)
+        return f"{p.scheme}://{p.netloc}{p.path}"
+    except Exception:
+        return url
