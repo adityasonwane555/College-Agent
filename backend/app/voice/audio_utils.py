@@ -102,3 +102,36 @@ def get_wav_duration(wav_path: Path) -> float:
             return round(frames / float(rate), 3)
     except Exception:
         return 0.0
+
+
+def is_valid_wav_header(file_path: Path) -> bool:
+    """
+    Verifies that a file begins with valid RIFF and WAVE header magic bytes.
+
+    Args:
+        file_path: Filesystem path to test.
+
+    Returns:
+        bool: True if file contains valid WAV magic header.
+    """
+    if not file_path.exists() or file_path.stat().st_size < 12:
+        return False
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(12)
+            return header[:4] == b"RIFF" and header[8:12] == b"WAVE"
+    except Exception:
+        return False
+
+
+def get_audio_file_size(file_path: Path) -> int:
+    """
+    Safely retrieves the size of an audio file in bytes.
+
+    Args:
+        file_path: Target audio file path.
+
+    Returns:
+        int: Size in bytes, or 0 if missing.
+    """
+    return file_path.stat().st_size if file_path.exists() else 0
