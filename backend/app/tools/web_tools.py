@@ -187,3 +187,25 @@ async def search_internet(query: str, num_results: int = 4) -> Dict[str, Any]:
         "citations": citations,
         "sources": filtered_sources
     }
+
+
+def is_web_search_available() -> bool:
+    """Checks whether web search is enabled in configuration."""
+    return bool(settings.WEB_SEARCH_ENABLED)
+
+
+def extract_domain(url: str) -> str:
+    """
+    Extracts the clean network domain name from a URL.
+
+    Args:
+        url: Full web address string.
+
+    Returns:
+        str: Domain name (e.g. 'en.wikipedia.org').
+    """
+    try:
+        from urllib.parse import urlparse
+        return urlparse(url).netloc or url
+    except Exception:
+        return url
