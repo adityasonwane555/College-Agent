@@ -211,3 +211,29 @@ def search_college_documents(query: str) -> Dict[str, Any]:
         "passages": "\n\n".join(formatted_texts),
         "citations": citations
     }
+
+
+def get_all_tool_names() -> List[str]:
+    """Returns list of all registered college institutional query tools."""
+    return [
+        "search_faq",
+        "get_department",
+        "get_room",
+        "get_faculty",
+        "get_college_hours",
+        "get_upcoming_events",
+        "get_announcements",
+        "search_college_documents"
+    ]
+
+
+def get_contact_directory() -> str:
+    """Returns a consolidated directory summary of key campus leadership and offices."""
+    return (
+        "APCOER Key Contacts:\n"
+        "- Principal Office: Dr. Sunil B. Thakare (Room 101, Main Building)\n"
+        "- Vice Principal: Prof. Shrikant B. Jagtap (Mechanical Dept)\n"
+        "- Training & Placement Officer: Prof. Nilesh S. Totla (Room TPO-01)\n"
+        "- Student Administrative Section: Room 102 (Admissions & Bonafide)\n"
+        "- Central Library Circulation: Ground Floor, Library Wing"
+    )
