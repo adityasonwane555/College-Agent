@@ -73,3 +73,29 @@ def verify_admin_token(authorization: str = Header(None)) -> bool:
             detail="Invalid or expired administrative token."
         )
     return True
+
+
+def revoke_admin_token(token: str) -> bool:
+    """
+    Invalidates and removes an active administrative bearer session token.
+
+    Args:
+        token: Bearer token string to revoke.
+
+    Returns:
+        bool: True if token was found and revoked, False otherwise.
+    """
+    if token in ACTIVE_ADMIN_TOKENS:
+        ACTIVE_ADMIN_TOKENS.discard(token)
+        return True
+    return False
+
+
+def get_active_token_count() -> int:
+    """
+    Returns the total number of currently active administrator sessions.
+
+    Returns:
+        int: Active token count.
+    """
+    return len(ACTIVE_ADMIN_TOKENS)
