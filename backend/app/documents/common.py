@@ -85,3 +85,56 @@ class ExtractedDocument(BaseModel):
     processing_duration_seconds: float = 0.0
     created_at: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     version: int = 1
+
+    def get_total_character_count(self) -> int:
+        """
+        Calculates the aggregate character length across the extracted document.
+
+        Returns:
+            int: Total character count of extracted full-text or chunk passages.
+        """
+        if self.extracted_text:
+            return len(self.extracted_text)
+        return sum(len(c.content) for c in self.chunks)
+
+    def has_processing_warnings(self) -> bool:
+        """
+        Predicate indicating whether extraction warnings were flagged during processing.
+
+        Returns:
+            bool: True if warnings list is non-empty, False otherwise.
+        """
+        return len(self.warnings) > 0
+
+
+TERMINAL_INGESTION_STATUSES = {
+    IngestionStatus.APPROVED,
+    IngestionStatus.REJECTED,
+    IngestionStatus.SUPERSEDED,
+    IngestionStatus.FAILED,
+    IngestionStatus.ARCHIVED,
+}
+
+
+def is_terminal_ingestion_status(status: IngestionStatus) -> bool:
+    """
+    Determines whether a document ingestion milestone is in a settled/terminal state.
+
+    Args:
+        status: Current IngestionStatus enum value.
+
+    Returns:
+        bool: True if document processing has finished (approved/rejected/archived), False if in-flight.
+    """
+    return status in TERMINAL_INGESTION_STATUSES
+
+
+def get_active_ingestion_statuses() -> List[IngestionStatus]:
+    """
+    Returns an enumeration list of all active (non-terminal) document processing states.
+
+    Returns:
+        List[IngestionStatus]: Ingestion statuses that represent work in progress.
+    """
+    return [s for s in IngestionStatus if s not in TERMINAL_INGESTION_STATUSES]
+
