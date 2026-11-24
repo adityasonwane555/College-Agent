@@ -138,3 +138,51 @@ export interface DocumentMeta {
   uploaded_at: string;
   chunk_count: number;
 }
+
+/**
+ * Hardware LED strip status and color mode settings.
+ */
+export interface HardwareLedState {
+  mode: string;
+  color: string;
+  brightness: number;
+  is_active: boolean;
+}
+
+/**
+ * Host machine system health and computational resource telemetry.
+ */
+export interface SystemStats {
+  cpu_percent: number;
+  memory_mb: number;
+  active_connections: number;
+  uptime_seconds: number;
+  timestamp: string;
+}
+
+/**
+ * Audio capture and playback telemetry envelope.
+ */
+export interface AudioTelemetry {
+  sample_rate: number;
+  duration_ms: number;
+  format: string;
+  channels: number;
+}
+
+/**
+ * Type guard to validate whether a string conforms to the RobotState union.
+ */
+export function isValidRobotState(state: string): state is RobotState {
+  return ['idle', 'listening', 'thinking', 'speaking', 'happy', 'error'].includes(state);
+}
+
+/**
+ * Type guard to check if an object satisfies the Citation interface.
+ */
+export function isCitation(obj: unknown): obj is Citation {
+  if (!obj || typeof obj !== 'object') return false;
+  const candidate = obj as Record<string, unknown>;
+  return typeof candidate.source === 'string' && typeof candidate.snippet === 'string';
+}
+
