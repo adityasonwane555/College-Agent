@@ -20,6 +20,48 @@ interface StatusIndicatorProps {
   customMessage?: string;
 }
 
+/**
+ * Resolves the primary theme accent color for a given robot conversational state.
+ */
+export const getStatusColor = (state: RobotState): string => {
+  switch (state) {
+    case 'listening':
+      return '#00f0ff';
+    case 'thinking':
+      return '#c084fc';
+    case 'speaking':
+      return '#38bdf8';
+    case 'happy':
+      return '#34d399';
+    case 'error':
+      return '#f87171';
+    case 'idle':
+    default:
+      return '#94a3b8';
+  }
+};
+
+/**
+ * Produces an accessible ARIA description for screen readers based on the robot state.
+ */
+export const getStatusAriaLabel = (state: RobotState): string => {
+  switch (state) {
+    case 'listening':
+      return 'Buddy AI is listening for microphone audio input';
+    case 'thinking':
+      return 'Buddy AI is searching college records and generating response';
+    case 'speaking':
+      return 'Buddy AI is speaking audio response';
+    case 'happy':
+      return 'Buddy AI completed answer successfully';
+    case 'error':
+      return 'Buddy AI encountered a processing error';
+    case 'idle':
+    default:
+      return 'Buddy AI is ready and waiting for query';
+  }
+};
+
 export const StatusIndicator: React.FC<StatusIndicatorProps> = ({ state, customMessage }) => {
   const getDefaultMessage = () => {
     switch (state) {
@@ -59,14 +101,19 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({ state, customM
   const badge = getBadgeStyle();
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '8px',
-      margin: '12px 0 16px 0',
-      textAlign: 'center'
-    }}>
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={getStatusAriaLabel(state)}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '8px',
+        margin: '12px 0 16px 0',
+        textAlign: 'center'
+      }}
+    >
       <div style={{
         display: 'inline-flex',
         alignItems: 'center',
