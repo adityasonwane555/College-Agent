@@ -255,3 +255,50 @@ def validate_tool_arguments(tool_name: str, arguments: Dict[str, Any]) -> Tuple[
         if param not in arguments or arguments[param] is None:
             return False, f"Missing required parameter '{param}' for tool '{tool_name}'."
     return True, None
+
+
+def is_tool_registered(tool_name: str) -> bool:
+    """
+    Fast predicate to verify whether a tool name is currently mapped in the dispatcher registry.
+
+    Args:
+        tool_name: Identifier of the tool.
+
+    Returns:
+        bool: True if callable is registered, False otherwise.
+    """
+    return bool(tool_name and tool_name in TOOL_FUNCTIONS)
+
+
+def is_coroutine_tool(tool_name: str) -> bool:
+    """
+    Inspects whether the registered tool handler requires an asynchronous event loop invocation.
+
+    Args:
+        tool_name: Identifier of the tool.
+
+    Returns:
+        bool: True if callable is an async coroutine function, False if synchronous or unregistered.
+    """
+    func = TOOL_FUNCTIONS.get(tool_name)
+    if not func:
+        return False
+    return inspect.iscoroutinefunction(func)
+
+
+def get_tool_parameter_names(tool_name: str) -> List[str]:
+    """
+    Extracts the list of declared parameter names from a tool's schema specification.
+
+    Args:
+        tool_name: Identifier of the tool.
+
+    Returns:
+        List[str]: Parameter keys declared under properties, or an empty list.
+    """
+    schema = get_tool_schema(tool_name)
+    if not schema:
+        return []
+    properties = schema.get("function", {}).get("parameters", {}).get("properties", {})
+    return sorted(list(properties.keys()))
+
