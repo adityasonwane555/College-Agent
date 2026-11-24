@@ -21,7 +21,7 @@ Architecture & Data Layer:
       - ChatMessageModel: Multi-turn dialog turns including roles, tool calls, and citations.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -195,3 +195,65 @@ class ChatMessageModel(BaseModel):
     name: Optional[str] = None
     tool_calls: Optional[List[dict]] = None
     citations: Optional[List[CitationModel]] = None
+
+
+class SystemMetricModel(BaseModel):
+    """
+    Schema for operational runtime system metrics, hardware telemetry, and resource tracking.
+    """
+    metric_name: str
+    metric_value: float
+    category: str = "performance"
+    unit: str = ""
+    timestamp: Optional[str] = None
+    metadata_json: Optional[str] = "{}"
+
+
+SUPPORTED_ENTITY_TYPES: List[str] = [
+    "announcement",
+    "department",
+    "document",
+    "event",
+    "faculty",
+    "faq",
+    "hours",
+    "room",
+]
+
+
+def is_supported_entity_type(entity_type: str) -> bool:
+    """
+    Validates whether an entity type string corresponds to a registered relational schema.
+
+    Args:
+        entity_type: Case-insensitive entity category identifier.
+
+    Returns:
+        bool: True if entity type is recognized in the knowledge schemas, False otherwise.
+    """
+    if not entity_type or not isinstance(entity_type, str):
+        return False
+    return entity_type.strip().lower() in SUPPORTED_ENTITY_TYPES
+
+
+def format_citation_reference(citation: CitationModel) -> str:
+    """
+    Formats a CitationModel into a standardized, reader-friendly academic reference badge.
+
+    Args:
+        citation: CitationModel instance containing source document and page anchors.
+
+    Returns:
+        str: Formatted attribution string (e.g., "[Prospectus.pdf, p. 12] snippet...").
+    """
+    parts = [citation.source]
+    if citation.page is not None:
+        parts.append(f"p. {citation.page}")
+    if citation.section:
+        parts.append(f"§ {citation.section}")
+    badge = f"[{', '.join(parts)}]"
+    cleaned_snippet = citation.snippet.strip().replace("\n", " ")
+    if len(cleaned_snippet) > 80:
+        cleaned_snippet = cleaned_snippet[:77] + "..."
+    return f"{badge} {cleaned_snippet}" if cleaned_snippet else badge
+
