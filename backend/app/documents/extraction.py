@@ -229,3 +229,48 @@ def extract_event_from_document(doc: ExtractedDocument) -> Optional[EventSchema]
         verification_status="pending_review",
         warnings=warnings
     )
+
+
+def extract_contact_info(text: str) -> Dict[str, List[str]]:
+    """
+    Extracts contact emails and phone numbers from unstructured document text.
+
+    Args:
+        text: Raw document text string.
+
+    Returns:
+        Dict[str, List[str]]: Dictionary with 'emails' and 'phones' list entries.
+    """
+    if not text:
+        return {"emails": [], "phones": []}
+
+    email_pattern = r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
+    phone_pattern = r'(?:\+91[\s-]?)?[6789]\d{9}|\b0\d{2,4}[-\s]?\d{6,8}\b'
+
+    emails = sorted(list(set(re.findall(email_pattern, text))))
+    phones = sorted(list(set(re.findall(phone_pattern, text))))
+
+    return {"emails": emails, "phones": phones}
+
+
+def format_event_summary(event: EventSchema) -> str:
+    """
+    Formats a validated EventSchema into a concise institutional bulletin summary.
+
+    Args:
+        event: Populated EventSchema model.
+
+    Returns:
+        str: Clean single-line summary with venue and dates.
+    """
+    summary_parts = [f"Event: {event.title}", f"Date: {event.date}"]
+    if event.time:
+        summary_parts.append(f"Time: {event.time}")
+    summary_parts.append(f"Venue: {event.venue}")
+    if event.organizer:
+        summary_parts.append(f"Organizer: {event.organizer}")
+    if event.registration_required:
+        deadline_str = f" (Deadline: {event.registration_deadline})" if event.registration_deadline else ""
+        summary_parts.append(f"Registration Required{deadline_str}")
+    return " | ".join(summary_parts)
+
