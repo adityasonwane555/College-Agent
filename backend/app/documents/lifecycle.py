@@ -209,4 +209,51 @@ class KnowledgeLifecycleManager:
         }
 
 
+SUPPORTED_MIME_TYPES: List[str] = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "text/markdown",
+    "text/csv",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/json",
+    "text/html",
+]
+
+
+def is_supported_mime_type(mime_type: str) -> bool:
+    """
+    Validates whether a given MIME type is supported by the document processor registry.
+
+    Args:
+        mime_type: Lowercase MIME content-type string.
+
+    Returns:
+        bool: True if supported, False otherwise.
+    """
+    if not mime_type or not isinstance(mime_type, str):
+        return False
+    return mime_type.strip().lower() in SUPPORTED_MIME_TYPES
+
+
+def format_ingestion_report(summary: Dict[str, Any]) -> str:
+    """
+    Formats a lifecycle ingestion result dictionary into an institutional audit summary.
+
+    Args:
+        summary: Dictionary returned by KnowledgeLifecycleManager.process_and_ingest.
+
+    Returns:
+        str: Concise single-line summary of ingestion status, chunks, and revision.
+    """
+    status = summary.get("status", "unknown")
+    filename = summary.get("filename", "unknown_file")
+    version = summary.get("version", 1)
+    chunks = summary.get("chunk_count", 0)
+    lifecycle_status = summary.get("lifecycle_status", "pending")
+    return f"[{status.upper()}] '{filename}' (v{version}) -> {chunks} chunks, status: {lifecycle_status}"
+
+
 lifecycle_manager = KnowledgeLifecycleManager(default_auto_approve=False)
+
