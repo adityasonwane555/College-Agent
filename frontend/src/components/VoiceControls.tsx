@@ -33,6 +33,34 @@ interface VoiceControlsProps {
   onSelectInputSource?: (source: 'robot' | 'laptop') => void;
 }
 
+/**
+ * Generates an accessible tooltip description for the main microphone action button.
+ */
+export const getMicButtonTooltip = (isRecording: boolean, isSpeaking: boolean): string => {
+  if (isSpeaking) {
+    return 'Buddy is currently speaking. Click Stop Audio to interrupt.';
+  }
+  if (isRecording) {
+    return 'Listening in progress... Click or release to submit speech.';
+  }
+  return 'Click to talk or press and hold for push-to-talk.';
+};
+
+/**
+ * Maps audio output routing targets to clear user-facing display labels.
+ */
+export const getAudioTargetLabel = (target: 'robot' | 'laptop' | 'both'): string => {
+  switch (target) {
+    case 'robot':
+      return 'Robot Speaker (ESP32 MAX98357A)';
+    case 'laptop':
+      return 'Laptop Speaker (Browser)';
+    case 'both':
+    default:
+      return 'Dual Speaker (Robot + Laptop)';
+  }
+};
+
 export const VoiceControls: React.FC<VoiceControlsProps> = ({
   isRecording,
   isSpeaking,
@@ -123,6 +151,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
           <button
             onClick={handleClick}
             onPointerUp={handlePointerUp}
+            aria-label={getMicButtonTooltip(isRecording, isSpeaking)}
             style={{
               width: '68px',
               height: '68px',
@@ -140,7 +169,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
               userSelect: 'none',
               touchAction: 'none'
             }}
-            title="Recording active! Click or release to stop and transcribe"
+            title={getMicButtonTooltip(isRecording, isSpeaking)}
           >
             <Square size={24} fill="#ffffff" />
           </button>
@@ -149,6 +178,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onClick={handleClick}
+            aria-label={getMicButtonTooltip(isRecording, isSpeaking)}
             style={{
               width: '68px',
               height: '68px',
@@ -165,7 +195,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
               userSelect: 'none',
               touchAction: 'none'
             }}
-            title="Push to Talk: Hold to speak, or click once to record"
+            title={getMicButtonTooltip(isRecording, isSpeaking)}
           >
             <Mic size={28} />
           </button>
