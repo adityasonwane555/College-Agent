@@ -230,6 +230,66 @@ class LocalVectorStore:
             "recent_errors": len(self.indexing_errors)
         }
 
+    def has_indexed_vectors(self) -> bool:
+        """
+        Fast check indicating whether any chunk vectors are currently indexed in the store.
+
+        Returns:
+            bool: True if at least one vector exists in the store, False otherwise.
+        """
+        all_vectors = repo.get_all_chunk_vectors()
+        return len(all_vectors) > 0
+
+    def clear_indexing_errors(self) -> int:
+        """
+        Clears the recorded in-memory indexing errors list and returns the cleared count.
+
+        Returns:
+            int: Number of cleared error entries.
+        """
+        count = len(self.indexing_errors)
+        self.indexing_errors.clear()
+        return count
+
+
+def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
+    """
+    Calculates cosine similarity between two dense float vectors.
+
+    Args:
+        vec_a: First float vector list.
+        vec_b: Second float vector list.
+
+    Returns:
+        float: Cosine similarity in range [-1.0, 1.0], or 0.0 if zero-magnitude.
+    """
+    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
+        return 0.0
+    arr_a = np.array(vec_a, dtype=np.float32)
+    arr_b = np.array(vec_b, dtype=np.float32)
+    norm_a = float(np.linalg.norm(arr_a))
+    norm_b = float(np.linalg.norm(arr_b))
+    if norm_a < 1e-6 or norm_b < 1e-6:
+        return 0.0
+    return float(np.dot(arr_a, arr_b) / (norm_a * norm_b))
+
+
+def is_normalized_vector(vec: List[float], tolerance: float = 1e-3) -> bool:
+    """
+    Validates whether a vector is L2-normalized (magnitude approximately 1.0).
+
+    Args:
+        vec: Float vector list.
+        tolerance: Allowed deviation from 1.0 (default: 0.001).
+
+    Returns:
+        bool: True if Euclidean norm is within tolerance of 1.0.
+    """
+    if not vec:
+        return False
+    norm = float(np.linalg.norm(np.array(vec, dtype=np.float32)))
+    return abs(norm - 1.0) <= tolerance
+
 
 vector_store = LocalVectorStore()
 
