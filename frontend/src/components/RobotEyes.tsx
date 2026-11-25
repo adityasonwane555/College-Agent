@@ -23,6 +23,34 @@ interface RobotEyesProps {
 }
 
 /**
+ * Maps the current RobotState to an accessible descriptive summary of eye animations.
+ */
+export const getEyeExpressionDescription = (state: RobotState): string => {
+  switch (state) {
+    case 'listening':
+      return 'Robot eyes alert and dilated with cyan highlights';
+    case 'thinking':
+      return 'Robot eyes looking upward in cognitive contemplation';
+    case 'speaking':
+      return 'Robot eyes expressively pulsing in sync with voice output';
+    case 'happy':
+      return 'Robot eyes shaped in cheerful upward crescent curves';
+    case 'error':
+      return 'Robot eyes displaying diagnostic error indicators';
+    case 'idle':
+    default:
+      return 'Robot eyes at neutral resting position with natural periodic blinking';
+  }
+};
+
+/**
+ * Validates whether a proposed blink delay interval is within natural physiological bounds.
+ */
+export const isValidBlinkInterval = (delayMs: number): boolean => {
+  return typeof delayMs === 'number' && !isNaN(delayMs) && delayMs >= 1000 && delayMs <= 15000;
+};
+
+/**
  * Procedurally animated robot eyes with autonomous stochastic blinking and emotional states.
  */
 export const RobotEyes: React.FC<RobotEyesProps> = ({ state }) => {
@@ -47,7 +75,11 @@ export const RobotEyes: React.FC<RobotEyesProps> = ({ state }) => {
   }, []);
 
   return (
-    <div className={`robot-eyes-row eye-state-${state}`}>
+    <div
+      role="img"
+      aria-label={getEyeExpressionDescription(state)}
+      className={`robot-eyes-row eye-state-${state}`}
+    >
       {/* Left Eye */}
       <div className={`robot-eye ${isBlinking ? 'blinking' : ''}`}>
         <div className="robot-eye-pupil" />
