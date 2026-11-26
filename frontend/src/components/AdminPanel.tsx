@@ -28,6 +28,36 @@ interface AdminPanelProps {
   onDataModified?: () => void;
 }
 
+/**
+ * Validates administrative password constraints before submission.
+ */
+export const validateAdminPassword = (password: string): { isValid: boolean; message: string } => {
+  if (!password || password.trim().length < 6) {
+    return { isValid: false, message: 'Password must be at least 6 characters long.' };
+  }
+  return { isValid: true, message: 'Password satisfies length requirements.' };
+};
+
+/**
+ * Maps administrative panel tab keys to accessible human-readable labels.
+ */
+export const getAdminTabLabel = (tab: 'faq' | 'department' | 'event' | 'upload' | 'review'): string => {
+  switch (tab) {
+    case 'faq':
+      return 'FAQ Knowledge Management';
+    case 'department':
+      return 'Academic Departments Directory';
+    case 'event':
+      return 'Campus Events & Calendar';
+    case 'upload':
+      return 'Universal Document Ingestion';
+    case 'review':
+      return 'Human-in-the-Loop Review Queue';
+    default:
+      return 'Administration';
+  }
+};
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onDataModified }) => {
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState('admin');
