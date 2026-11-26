@@ -29,15 +29,54 @@ interface RobotFaceProps {
 }
 
 /**
+ * Maps current robot conversational state to an accessible overall facial stage description.
+ */
+export const getStageStatusAriaLabel = (state: RobotState): string => {
+  switch (state) {
+    case 'listening':
+      return 'Buddy AI face stage active: listening to microphone audio with animated cyan waveform';
+    case 'thinking':
+      return 'Buddy AI face stage active: cognitive reasoning mode with celestial orbiting halo';
+    case 'speaking':
+      return 'Buddy AI face stage active: vocal synthesis mode with synchronized mouth modulation';
+    case 'happy':
+      return 'Buddy AI face stage active: successful query resolution with joyful facial expression';
+    case 'error':
+      return 'Buddy AI face stage active: diagnostic alert state';
+    case 'idle':
+    default:
+      return 'Buddy AI face stage ready: resting idle state with stochastic blinking';
+  }
+};
+
+/**
+ * Predicate determining whether the celestial thinking halo particle ring is active.
+ */
+export const shouldDisplayHalo = (state: RobotState): boolean => {
+  return state === 'thinking';
+};
+
+/**
+ * Predicate determining whether the listening waveform visualizer should replace the mouth.
+ */
+export const shouldDisplayWaveform = (state: RobotState): boolean => {
+  return state === 'listening';
+};
+
+/**
  * Renders the interactive robot face stage for the browser reception kiosk.
  * Coordinates state-driven CSS classes for animations, halo effects, and audio-reactive waveforms.
  */
 export const RobotFace: React.FC<RobotFaceProps> = ({ state }) => {
   return (
-    <div className="robot-stage">
+    <div
+      role="region"
+      aria-label={getStageStatusAriaLabel(state)}
+      className="robot-stage"
+    >
       <div className={`robot-head-wrapper ${state}`}>
         {/* Thinking Halo Ring: Orbiting particle ring rendered during AI reasoning */}
-        {state === 'thinking' && <div className="thinking-halo" />}
+        {shouldDisplayHalo(state) && <div className="thinking-halo" />}
 
         {/* Left Antenna Ear: Ambient lateral status node */}
         <div className="robot-antenna left">
@@ -58,7 +97,7 @@ export const RobotFace: React.FC<RobotFaceProps> = ({ state }) => {
             </div>
 
             {/* Mouth or Waveform: Switches between animated lip-sync and live mic waveform */}
-            {state === 'listening' ? (
+            {shouldDisplayWaveform(state) ? (
               <div style={{ marginTop: '20px' }}>
                 <ListeningWaveform />
               </div>
@@ -76,3 +115,4 @@ export const RobotFace: React.FC<RobotFaceProps> = ({ state }) => {
     </div>
   );
 };
+
