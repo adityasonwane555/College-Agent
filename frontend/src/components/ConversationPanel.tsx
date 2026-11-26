@@ -26,6 +26,37 @@ interface ConversationPanelProps {
   onClearSession: () => void;
 }
 
+/**
+ * Formats an ISO timestamp or time string into a concise locale-friendly clock time.
+ */
+export const formatMessageTimestamp = (timestampStr: string): string => {
+  if (!timestampStr) return '';
+  try {
+    const date = new Date(timestampStr);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch {
+    // fallback to original string
+  }
+  return timestampStr;
+};
+
+/**
+ * Helper predicate checking if a chat message contains verified source citations.
+ */
+export const hasVerifiedCitations = (message: ChatMessage): boolean => {
+  return Boolean(message.citations && message.citations.length > 0);
+};
+
+/**
+ * Generates an accessible citation badge summary string for a message.
+ */
+export const getCitationSummary = (citations?: ChatMessage['citations']): string => {
+  if (!citations || citations.length === 0) return 'No citations';
+  return `${citations.length} verified ${citations.length === 1 ? 'citation' : 'citations'}`;
+};
+
 export const ConversationPanel: React.FC<ConversationPanelProps> = ({ messages, onClearSession }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
