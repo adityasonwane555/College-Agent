@@ -226,3 +226,51 @@ def ingest_documents_in_directory(
         "failed": failed,
         "errors": errors
     }
+
+
+def is_supported_ingestion_extension(extension: str) -> bool:
+    """
+    Checks if a file extension is supported by the universal document ingestion pipeline.
+
+    Args:
+        extension: Lowercase extension with or without leading dot.
+
+    Returns:
+        bool: True if file format is supported, False otherwise.
+    """
+    clean_ext = extension.strip().lstrip(".").lower() if extension else ""
+    supported = {"txt", "pdf", "docx", "csv", "xlsx", "pptx", "json", "yaml", "html", "md"}
+    return clean_ext in supported
+
+
+def estimate_chunk_count(text: str, average_chunk_size: int = 400) -> int:
+    """
+    Provides a fast heuristic estimation of chunk count for an arbitrary raw text block.
+
+    Args:
+        text: Plain document text string.
+        average_chunk_size: Character threshold per chunk (default: 400).
+
+    Returns:
+        int: Estimated number of chunks (minimum 1 if text is non-empty).
+    """
+    if not text or not text.strip():
+        return 0
+    return max(1, round(len(text.strip()) / average_chunk_size))
+
+
+def sanitize_section_title(raw_title: str) -> str:
+    """
+    Cleans and standardizes raw section titles parsed from documents.
+
+    Args:
+        raw_title: Unprocessed section header string.
+
+    Returns:
+        str: Trimmed, sanitized section title, defaulting to 'General' if empty.
+    """
+    if not raw_title or not isinstance(raw_title, str):
+        return "General"
+    cleaned = re.sub(r'^[#*\-•\s]+', '', raw_title.strip()).strip()
+    return cleaned if cleaned else "General"
+
