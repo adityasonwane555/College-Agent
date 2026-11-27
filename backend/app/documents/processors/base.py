@@ -72,3 +72,51 @@ class BaseProcessor(ABC):
             ExtractedDocument: Populated canonical document envelope.
         """
         pass
+
+    def supports_extension(self, extension: str) -> bool:
+        """
+        Checks whether this processor explicitly supports the given file extension.
+
+        Args:
+            extension: Lowercase file extension with or without leading dot.
+
+        Returns:
+            bool: True if extension is in supported_extensions list, False otherwise.
+        """
+        clean_ext = extension.strip().lstrip(".").lower()
+        return clean_ext in [e.lower() for e in self.supported_extensions]
+
+    def get_capabilities(self) -> Dict[str, Any]:
+        """
+        Summarizes the execution capabilities and requirements of this processor.
+
+        Returns:
+            Dict[str, Any]: Capability flags dictionary.
+        """
+        return {
+            "supported_extensions": self.supported_extensions,
+            "document_type": self.document_type.value,
+            "requires_ocr": self.requires_ocr,
+            "requires_transcription": self.requires_transcription,
+            "can_extract_locally": self.can_extract_locally
+        }
+
+
+def clean_file_extension(filename: str) -> str:
+    """
+    Extracts and standardizes the lowercase file extension from a filename or path.
+
+    Args:
+        filename: Filename or path string.
+
+    Returns:
+        str: Normalized extension without leading dot (e.g. 'pdf', 'docx').
+    """
+    if not filename or not isinstance(filename, str):
+        return ""
+    clean = filename.strip().lower()
+    if "." in clean:
+        return clean.rsplit(".", 1)[-1].strip()
+    return clean
+
+
