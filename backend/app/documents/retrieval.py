@@ -111,3 +111,50 @@ def search_documents(query: str, top_k: int = 3, threshold: float = 0.25) -> Lis
 def format_citations(retrieval_results: List[Dict[str, Any]]) -> List[CitationModel]:
     """Converts retrieval results into CitationModel instances."""
     return build_citations(retrieval_results)
+
+
+def is_search_query_relevant(query: str, min_term_length: int = 3) -> bool:
+    """
+    Checks if an input query contains at least one substantive, non-stopword keyword.
+
+    Args:
+        query: Raw user query string.
+        min_term_length: Minimum character length for candidate keywords (default: 3).
+
+    Returns:
+        bool: True if query contains substantive search terms, False otherwise.
+    """
+    if not query or not isinstance(query, str):
+        return False
+    terms = extract_keywords(query)
+    return any(len(t) >= min_term_length for t in terms)
+
+
+def calculate_retrieval_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Computes statistical telemetry across a set of retrieved passage results.
+
+    Args:
+        results: List of result dictionaries with 'relevance_score' and 'source' keys.
+
+    Returns:
+        Dict[str, Any]: Summary metrics including result_count, max_score, average_score, and distinct_sources.
+    """
+    if not results:
+        return {
+            "result_count": 0,
+            "max_score": 0.0,
+            "average_score": 0.0,
+            "distinct_sources": []
+        }
+
+    scores = [r.get("relevance_score", 0.0) for r in results]
+    sources = sorted(list(set(r.get("source", "unknown") for r in results)))
+
+    return {
+        "result_count": len(results),
+        "max_score": round(max(scores), 3) if scores else 0.0,
+        "average_score": round(sum(scores) / len(scores), 3) if scores else 0.0,
+        "distinct_sources": sources
+    }
+
