@@ -12,19 +12,40 @@
 
 import React from 'react';
 
+interface ListeningWaveformProps {
+  barCount?: number;
+  isActive?: boolean;
+  className?: string;
+}
+
+/**
+ * Produces an accessible ARIA label for screen readers.
+ */
+export const getWaveformAriaLabel = (isActive: boolean): string => {
+  return isActive ? 'Microphone audio listening visualizer active' : 'Audio visualizer idle';
+};
+
 /**
  * Animated waveform bars indicating active speech recording and voice detection.
  */
-export const ListeningWaveform: React.FC = () => {
+export const ListeningWaveform: React.FC<ListeningWaveformProps> = ({
+  barCount = 7,
+  isActive = true,
+  className = ''
+}) => {
+  const bars = Array.from({ length: barCount }, (_, i) => i);
+
   return (
-    <div className="waveform-bars">
-      <div className="waveform-bar" />
-      <div className="waveform-bar" />
-      <div className="waveform-bar" />
-      <div className="waveform-bar" />
-      <div className="waveform-bar" />
-      <div className="waveform-bar" />
-      <div className="waveform-bar" />
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={getWaveformAriaLabel(isActive)}
+      className={`waveform-bars ${className}`.trim()}
+    >
+      {bars.map((barIndex) => (
+        <div key={barIndex} className="waveform-bar" />
+      ))}
     </div>
   );
 };
+
