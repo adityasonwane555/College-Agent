@@ -592,3 +592,32 @@ def seed_database(force: bool = False):
     ]
     for ann in announcements:
         repo.add_announcement(ann)
+
+
+def get_seed_entity_counts() -> dict:
+    """
+    Retrieves entity record counts across all core relational tables.
+
+    Returns:
+        dict: Table-by-table record count summary.
+    """
+    return {
+        "departments": len(repo.list_departments()),
+        "faqs": len(repo.list_faqs()),
+        "rooms": len(repo.list_rooms()),
+        "faculty": len(repo.list_faculty()),
+        "events": len(repo.get_upcoming_events()),
+        "announcements": len(repo.get_announcements())
+    }
+
+
+def is_database_seeded() -> bool:
+    """
+    Checks whether the database contains minimum baseline seed data.
+
+    Returns:
+        bool: True if key tables (departments, faqs) are populated, False otherwise.
+    """
+    counts = get_seed_entity_counts()
+    return counts["departments"] > 0 and counts["faqs"] > 0
+
